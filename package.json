@@ -1,0 +1,8 @@
+{
+    "name":"Lark-Plugin",
+    "type":"module",
+    "author":"yhz_cake",
+    "dependencies":{
+        "@larksuiteoapi/node-sdk":"^1.60.0"
+    }
+}
