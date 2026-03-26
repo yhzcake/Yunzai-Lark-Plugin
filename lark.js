@@ -372,8 +372,19 @@ const adapter = new class LarkAdapter {
     })
 
     try {
-      await client.auth.accessToken.v3.getAccessToken()
-      Bot.makeLog("mark", `飞书机器人连接成功`, app_id)
+      // 使用正确的 SDK 方法获取 tenant_access_token 来验证连接
+      const result = await client.auth.tenantAccessToken.internal({
+        data: {
+          app_id: app_id,
+          app_secret: app_secret
+        }
+      })
+      if (result.data?.tenant_access_token) {
+        Bot.makeLog("mark", `飞书机器人连接成功`, app_id)
+      } else {
+        Bot.makeLog("error", `飞书机器人连接失败: ${result.msg || "未知错误"}`, app_id)
+        return false
+      }
     } catch (error) {
       Bot.makeLog("error", `飞书机器人连接失败: ${error.message}`, app_id)
       return false
