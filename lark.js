@@ -379,6 +379,7 @@ const adapter = new class LarkAdapter {
           app_secret: app_secret
         }
       })
+      Bot.makeLog("info", `飞书API返回: ${JSON.stringify(result)}`, app_id)
       // 飞书 API 返回 code 为 0 表示成功
       if (result.code === 0 && result.data?.tenant_access_token) {
         Bot.makeLog("mark", `飞书机器人连接成功`, app_id)
