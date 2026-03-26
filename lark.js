@@ -379,10 +379,11 @@ const adapter = new class LarkAdapter {
           app_secret: app_secret
         }
       })
-      if (result.data?.tenant_access_token) {
+      // 飞书 API 返回 code 为 0 表示成功
+      if (result.code === 0 && result.data?.tenant_access_token) {
         Bot.makeLog("mark", `飞书机器人连接成功`, app_id)
       } else {
-        Bot.makeLog("error", `飞书机器人连接失败: ${result.msg || "未知错误"}`, app_id)
+        Bot.makeLog("error", `飞书机器人连接失败: ${result.msg || JSON.stringify(result)}`, app_id)
         return false
       }
     } catch (error) {
