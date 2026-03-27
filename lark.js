@@ -55,7 +55,8 @@ const adapter = new class LarkAdapter {
           }
           break
         case "reply":
-          content.content.text += `[回复：${i.id}]`
+          // 回复消息ID在 sendMsg 中单独处理，不添加到文本内容
+          Bot.makeLog("debug", `检测到回复消息ID: ${i.id}，不在文本中显示`, "Lark")
           break
         case "video":
           content.msg_type = "video"
