@@ -980,30 +980,8 @@ const adapter = new class LarkAdapter {
       message_type: chatType === "p2p" ? "private" : "group",
       message: [{ type: "text", text: callback }],
       raw_message: callback,
-      // 创建一个简化的 bot 对象，包含必要的方法
-      bot: {
-        uin: Bot[id].uin,
-        nickname: Bot[id].nickname,
-        avatar: Bot[id].avatar,
-        version: Bot[id].version,
-        stat: Bot[id].stat,
-        userCache: Bot[id].userCache,
-        chatCache: Bot[id].chatCache,
-        pickFriend: Bot[id].pickFriend,
-        pickUser: Bot[id].pickUser,
-        getFriendArray: Bot[id].getFriendArray,
-        getFriendList: Bot[id].getFriendList,
-        getFriendMap: Bot[id].getFriendMap,
-        pickMember: Bot[id].pickMember,
-        pickGroup: Bot[id].pickGroup,
-        getGroupArray: Bot[id].getGroupArray,
-        getGroupList: Bot[id].getGroupList,
-        getGroupMap: Bot[id].getGroupMap,
-        getGroupMemberMap: Bot[id].getGroupMemberMap,
-        fl: Bot[id].fl,
-        gl: Bot[id].gl,
-        gml: Bot[id].gml
-      }
+      // 传递完整的 bot 对象
+      bot: Bot[id]
     }
 
     // 如果是群聊，设置群ID
@@ -1012,7 +990,21 @@ const adapter = new class LarkAdapter {
       eventData.group_name = ""
     }
 
-    Bot.makeLog("info", `触发消息事件: ${JSON.stringify(eventData, null, 2)}`, id)
+    // 使用自定义的序列化函数来避免循环引用
+    const safeStringify = (obj) => {
+      const seen = new WeakSet()
+      return JSON.stringify(obj, (key, value) => {
+        if (typeof value === "object" && value !== null) {
+          if (seen.has(value)) {
+            return "[Circular]"
+          }
+          seen.add(value)
+        }
+        return value
+      }, 2)
+    }
+
+    Bot.makeLog("info", `触发消息事件: ${safeStringify(eventData)}`, id)
 
     // 触发消息事件，让 Yunzai 处理指令
     Bot.em("message", eventData)
