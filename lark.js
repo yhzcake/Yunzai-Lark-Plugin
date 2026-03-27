@@ -291,7 +291,7 @@ const adapter = new class LarkAdapter {
 
     // 使用通用卡片模板
     const cardContent = this.makeCardTemplate({
-      title: "合并转发消息",
+      title: "更新内容",
       template: "blue",
       elements: elements
     })
@@ -951,8 +951,8 @@ const adapter = new class LarkAdapter {
     const operator = data.event && data.event.operator
     const openId = data.open_id || (data.body && data.body.open_id) || (data.event && data.event.open_id) || (operator && operator.open_id)
     const userId = data.user_id || (data.body && data.body.user_id) || (data.event && data.event.user_id) || (operator && operator.user_id)
-    const chatId = data.chat_id || (data.body && data.body.chat_id) || (data.event && data.event.chat_id)
-    const chatType = data.chat_type || (data.body && data.body.chat_type) || (data.event && data.event.chat_type)
+    const chatId = data.chat_id || (data.body && data.body.chat_id) || (data.event && data.event.chat_id) || (data.event && data.event.open_chat_id)
+    const chatType = data.chat_type || (data.body && data.body.chat_type) || (data.event && data.event.chat_type) || (chatId ? "group" : "p2p")
     
     Bot.makeLog("debug", `用户信息: openId=${openId}, userId=${userId}, chatId=${chatId}, chatType=${chatType}`, id)
     
