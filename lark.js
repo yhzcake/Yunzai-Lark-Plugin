@@ -227,6 +227,16 @@ const adapter = new class LarkAdapter {
     const { content } = await this.makeMsg(msg, data.bot)
     Bot.makeLog("info", `发送消息：[${data.id}] msg_type=${content.msg_type}, content=${JSON.stringify(content.content)}`, data.self_id)
     
+    // 检查是否有回复消息
+    let replyMessageId = null
+    if (Array.isArray(msg)) {
+      const replyMsg = msg.find(m => m && m.type === "reply")
+      if (replyMsg && replyMsg.id) {
+        replyMessageId = replyMsg.id
+        Bot.makeLog("debug", `检测到回复消息: ${replyMessageId}`, data.self_id)
+      }
+    }
+    
     // 构建消息数据
     const messageData = {
       receive_id: data.id,
@@ -242,10 +252,18 @@ const adapter = new class LarkAdapter {
       messageData.content = JSON.stringify(content.content)
     }
     
+    // 如果有回复消息ID，添加到请求参数中
+    const params = {
+      receive_id_type: data.message_type === 'private' ? 'user_id' : 'chat_id',
+    }
+    if (replyMessageId) {
+      // 飞书回复消息需要设置 reply_in_thread 或使用 message_id 参数
+      // 注意：这里使用 reply_in_thread 参数
+      params.reply_in_thread = true
+    }
+    
     const ret = await data.bot.im.message.create({
-      params: {
-        receive_id_type: data.message_type === 'private' ? 'user_id' : 'chat_id',
-      },
+      params: params,
       data: messageData
     })
     
