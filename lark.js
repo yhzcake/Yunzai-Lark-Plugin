@@ -191,17 +191,21 @@ const adapter = new class LarkAdapter {
             actions: row
           })
         } else {
-          // 多个按钮使用多个 action 标签并排
-          // 飞书卡片中，action 标签不支持 layout 属性，需要手动排列
-          const actionElements = []
-          for (let i = 0; i < row.length; i += 2) {
-            const buttonPair = row.slice(i, i + 2)
-            actionElements.push({
+          // 多个按钮使用一个 action 标签，通过 layout 控制排列
+          // 或者使用多个 action 标签并排
+          elements.push({
+            tag: "action",
+            layout: "bisected",  // 双列布局
+            actions: row.slice(0, 2)  // 最多2个按钮一排
+          })
+          // 如果还有剩余按钮，再添加一行
+          if (row.length > 2) {
+            elements.push({
               tag: "action",
-              actions: buttonPair
+              layout: "bisected",
+              actions: row.slice(2, 4)
             })
           }
-          elements.push(...actionElements)
         }
       }
     }
@@ -946,12 +950,22 @@ const adapter = new class LarkAdapter {
     const operator = data.event && data.event.operator
     const openId = data.open_id || (data.body && data.body.open_id) || (data.event && data.event.open_id) || (operator && operator.open_id)
     const userId = data.user_id || (data.body && data.body.user_id) || (data.event && data.event.user_id) || (operator && operator.user_id)
-    const chatId = data.chat_id || (data.body && data.body.chat_id) || (data.event && data.event.chat_id) || data.open_chat_id
+    
+    // 检查所有可能的聊天ID字段名
+    const chatId = data.chat_id || (data.body && data.body.chat_id) || (data.event && data.event.chat_id) || 
+                   data.open_chat_id || (data.event && data.event.open_chat_id) ||
+                   data.chatId || (data.event && data.event.chatId) ||
+                   data.openChatId || (data.event && data.event.openChatId)
+    
     const chatType = data.chat_type || (data.body && data.body.chat_type) || (data.event && data.event.chat_type) || (chatId ? "group" : "p2p")
     
     Bot.makeLog("debug", `用户信息: openId=${openId}, userId=${userId}, chatId=${chatId}, chatType=${chatType}`, id)
     Bot.makeLog("debug", `data.chat_id: ${data.chat_id}, data.open_chat_id: ${data.open_chat_id}`, id)
     Bot.makeLog("debug", `data.event.chat_id: ${data.event && data.event.chat_id}, data.event.open_chat_id: ${data.event && data.event.open_chat_id}`, id)
+    Bot.makeLog("debug", `data 中所有包含 chat 的字段: ${JSON.stringify(Object.keys(data).filter(key => key.includes('chat')))}`, id)
+    if (data.event) {
+      Bot.makeLog("debug", `data.event 中所有包含 chat 的字段: ${JSON.stringify(Object.keys(data.event).filter(key => key.includes('chat')))}`, id)
+    }
     
     if (!openId && !userId) {
       Bot.makeLog("error", `无法获取用户信息`, id)
@@ -1084,7 +1098,7 @@ const adapter = new class LarkAdapter {
               action: action
             }
             Bot.makeLog("debug", `合并后的 cardData keys: ${Object.keys(cardData).join(", ")}`, id)
-            Bot.makeLog("debug", `eventData 内容: ${JSON.stringify(eventData).substring(0, 200)}`, id)
+            Bot.makeLog("debug", `eventData 内容: ${JSON.stringify(eventData)}`, id)
             const result = await this.handleCardAction(id, cardData)
             Bot.makeLog("info", `卡片动作处理结果: ${JSON.stringify(result)}`, id)
             res.json(result || { code: 0 })
