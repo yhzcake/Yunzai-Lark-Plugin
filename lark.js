@@ -501,20 +501,14 @@ const adapter = new class LarkAdapter {
     const webhookPath = config.webhook_path || "/lark/webhook"
 
     // 使用 Yunzai 的 express 服务器
-    Bot.express.use(webhookPath, async (req, res) => {
-      if (req.method !== "POST") {
-        res.statusCode = 405
-        res.end("Method Not Allowed")
-        return
-      }
-
+    Bot.express.post(webhookPath, async (req, res) => {
       try {
         // 构造符合 SDK 要求的数据格式
         const data = {
           headers: req.headers,
           ...req.body
         }
-        Bot.makeLog("debug", `收到飞书 webhook: ${JSON.stringify(data)}`, id)
+        Bot.makeLog("info", `收到飞书 webhook: ${JSON.stringify(data)}`, id)
 
         // 如果有加密，手动解密查看内容（调试用）
         if (data.encrypt && config.encrypt_key) {
@@ -522,7 +516,7 @@ const adapter = new class LarkAdapter {
             const { AESCipher } = lark
             const cipher = new AESCipher(config.encrypt_key)
             const decrypted = cipher.decrypt(data.encrypt)
-            Bot.makeLog("debug", `解密后数据: ${decrypted}`, id)
+            Bot.makeLog("info", `解密后数据: ${decrypted}`, id)
           } catch (e) {
             Bot.makeLog("error", `解密失败: ${e.message}`, id)
           }
@@ -533,7 +527,7 @@ const adapter = new class LarkAdapter {
         const { isChallenge, challenge } = lark.generateChallenge(data, {
           encryptKey: config.encrypt_key || ""
         })
-        Bot.makeLog("debug", `generateChallenge 结果: isChallenge=${isChallenge}, challenge=${JSON.stringify(challenge)}`, id)
+        Bot.makeLog("info", `generateChallenge 结果: isChallenge=${isChallenge}, challenge=${JSON.stringify(challenge)}`, id)
 
         if (isChallenge) {
           Bot.makeLog("mark", `飞书 webhook 验证成功`, id)
@@ -545,7 +539,7 @@ const adapter = new class LarkAdapter {
         // 如果有 encrypt_key，SDK 会自动解密和验证
         // 使用 needCheck: false 跳过额外验证，但 SDK 仍会解密数据
         const result = await eventDispatcher.invoke(data, { needCheck: false })
-        Bot.makeLog("debug", `事件处理结果: ${JSON.stringify(result)}`, id)
+        Bot.makeLog("info", `事件处理结果: ${JSON.stringify(result)}`, id)
         res.json(result || { code: 0 })
       } catch (error) {
         Bot.makeLog("error", `处理飞书 webhook 失败: ${error.message}`, id)
@@ -553,7 +547,7 @@ const adapter = new class LarkAdapter {
       }
     })
 
-    Bot.makeLog("mark", `飞书 webhook 已注册: ${webhookPath}`, id)
+    Bot.makeLog("mark", `飞书 webhook 已注册: POST ${webhookPath}`, id)
   }
 
   async load() {
