@@ -505,8 +505,14 @@ const adapter = new class LarkAdapter {
         Bot.makeLog("debug", `收到飞书 webhook: ${JSON.stringify(data)}`, id)
         
         // 处理 challenge 请求（配置 webhook 时飞书会发送验证请求）
-        if (data.challenge) {
-          res.json({ challenge: data.challenge })
+        // 使用 SDK 的 generateChallenge 处理加密数据
+        const { isChallenge, challenge } = lark.generateChallenge(data, {
+          encryptKey: config.encrypt_key || ""
+        })
+        
+        if (isChallenge) {
+          Bot.makeLog("mark", `飞书 webhook 验证成功`, id)
+          res.json(challenge)
           return
         }
 
