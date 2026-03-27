@@ -1008,12 +1008,26 @@ const adapter = new class LarkAdapter {
           return
         }
 
+        // 如果有加密，先解密数据
+        let decryptedData = data
+        if (data.encrypt && config.encrypt_key) {
+          try {
+            const { AESCipher } = lark
+            const cipher = new AESCipher(config.encrypt_key)
+            const decrypted = cipher.decrypt(data.encrypt)
+            Bot.makeLog("info", `解密后数据: ${decrypted}`, id)
+            decryptedData = JSON.parse(decrypted)
+          } catch (e) {
+            Bot.makeLog("error", `解密失败: ${e.message}`, id)
+          }
+        }
+
         // 检查是否是卡片按钮点击事件
         // 卡片事件的数据结构包含 action 字段
-        if (data.action || (data.body && data.body.action)) {
+        if (decryptedData.action || (decryptedData.body && decryptedData.body.action)) {
           Bot.makeLog("info", `收到飞书卡片动作事件`, id)
           try {
-            const result = await this.handleCardAction(id, data)
+            const result = await this.handleCardAction(id, decryptedData)
             Bot.makeLog("info", `卡片动作处理结果: ${JSON.stringify(result)}`, id)
             res.json(result || { code: 0 })
             return
