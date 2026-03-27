@@ -901,6 +901,8 @@ const adapter = new class LarkAdapter {
 
   async handleCardAction(id, data) {
     // 处理卡片按钮点击事件
+    Bot.makeLog("debug", `handleCardAction 收到数据: ${JSON.stringify(data).substring(0, 500)}`, id)
+    
     // 解析 action 数据
     const action = data.action || (data.body && data.body.action)
     if (!action) {
@@ -919,11 +921,19 @@ const adapter = new class LarkAdapter {
 
     Bot.makeLog("info", `卡片按钮点击: callback=${callback}`, id)
 
+    // 获取用户信息
+    const openId = data.open_id || (data.body && data.body.open_id)
+    const userId = data.user_id || (data.body && data.body.user_id)
+    const chatId = data.chat_id || (data.body && data.body.chat_id)
+    const chatType = data.chat_type || (data.body && data.body.chat_type)
+    
+    Bot.makeLog("debug", `用户信息: openId=${openId}, userId=${userId}, chatId=${chatId}, chatType=${chatType}`, id)
+
     // 构造消息数据，模拟用户发送指令
     const eventData = {
       self_id: id,
-      user_id: data.open_id || (data.body && data.body.open_id),
-      message_type: data.chat_type === "p2p" ? "private" : "group",
+      user_id: `lark_${userId || openId}`,
+      message_type: chatType === "p2p" ? "private" : "group",
       message: [{ type: "text", text: callback }],
       raw_message: callback,
       bot: Bot[id],
@@ -931,9 +941,11 @@ const adapter = new class LarkAdapter {
 
     // 如果是群聊，设置群ID
     if (eventData.message_type === "group") {
-      eventData.group_id = data.chat_id || (data.body && data.body.chat_id)
+      eventData.group_id = `lark_${chatId}`
       eventData.group_name = ""
     }
+
+    Bot.makeLog("info", `触发消息事件: ${JSON.stringify(eventData)}`, id)
 
     // 触发消息事件，让 Yunzai 处理指令
     Bot.em("message", eventData)
@@ -1023,11 +1035,20 @@ const adapter = new class LarkAdapter {
         }
 
         // 检查是否是卡片按钮点击事件
-        // 卡片事件的数据结构包含 action 字段
-        if (decryptedData.action || (decryptedData.body && decryptedData.body.action)) {
+        // 卡片事件的数据结构包含 action 字段（可能在根级别或 event 对象中）
+        const action = decryptedData.action || 
+                       (decryptedData.body && decryptedData.body.action) ||
+                       (decryptedData.event && decryptedData.event.action)
+        if (action) {
           Bot.makeLog("info", `收到飞书卡片动作事件`, id)
           try {
-            const result = await this.handleCardAction(id, decryptedData)
+            // 将 action 数据放到根级别，方便 handleCardAction 处理
+            const cardData = {
+              ...decryptedData,
+              ...(decryptedData.event || {}),
+              action: action
+            }
+            const result = await this.handleCardAction(id, cardData)
             Bot.makeLog("info", `卡片动作处理结果: ${JSON.stringify(result)}`, id)
             res.json(result || { code: 0 })
             return
