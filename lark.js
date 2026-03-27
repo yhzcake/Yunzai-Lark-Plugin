@@ -980,13 +980,13 @@ const adapter = new class LarkAdapter {
       message_type: chatType === "p2p" ? "private" : "group",
       message: [{ type: "text", text: callback }],
       raw_message: callback,
-      // 避免循环引用，只传递必要的信息
-      bot: {
-        uin: id,
-        nickname: "LarkBot",
-        adapter: this
-      },
+      // 传递完整的 bot 对象，但避免 JSON 序列化时的循环引用
+      bot: Bot[id]
     }
+    
+    // 删除可能导致循环引用的属性
+    delete eventData.bot.adapter
+    delete eventData.bot.client
 
     // 如果是群聊，设置群ID
     if (eventData.message_type === "group") {
