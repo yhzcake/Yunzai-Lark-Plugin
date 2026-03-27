@@ -611,9 +611,23 @@ const adapter = new class LarkAdapter {
 
     // 解析消息内容
     const content = JSON.parse(message.content)
+    
+    // 处理回复消息格式：[回复：消息ID]消息内容
     if (content.text) {
-      data.message.push({ type: "text", text: content.text })
-      data.raw_message += content.text
+      const replyMatch = content.text.match(/^\[回复：([^\]]+)\](.*)$/s)
+      if (replyMatch) {
+        // 这是回复消息
+        const replyMessageId = replyMatch[1]
+        const actualText = replyMatch[2].trim()
+        
+        data.message.push({ type: "reply", id: replyMessageId })
+        data.message.push({ type: "text", text: actualText })
+        data.raw_message += `[回复：${replyMessageId}]${actualText}`
+      } else {
+        // 普通文本消息
+        data.message.push({ type: "text", text: content.text })
+        data.raw_message += content.text
+      }
     }
 
     Bot.makeLog("info", `飞书${data.message_type === "group" ? "群" : "私聊"}消息：[${data.user_id}] ${data.raw_message}`, id)
