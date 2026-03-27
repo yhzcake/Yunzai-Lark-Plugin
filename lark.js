@@ -181,7 +181,7 @@ const adapter = new class LarkAdapter {
       })
     }
     
-    // 添加按钮组（使用多列布局，每行最多3个按钮）
+    // 添加按钮组（使用多列布局）
     if (buttonRows.length > 0) {
       for (const row of buttonRows) {
         if (row.length === 1) {
@@ -191,22 +191,21 @@ const adapter = new class LarkAdapter {
             actions: row
           })
         } else {
-          // 多个按钮使用 column_set 实现多列布局
-          const columns = row.map(btn => ({
-            tag: "column",
-            width: "auto",
-            elements: [{
-              tag: "action",
-              actions: [btn]
-            }]
-          }))
-          
+          // 多个按钮使用一个 action 标签，通过 layout 控制排列
+          // 或者使用多个 action 标签并排
           elements.push({
-            tag: "column_set",
-            flex_mode: "none",
-            background_style: "default",
-            columns: columns
+            tag: "action",
+            layout: "bisected",  // 双列布局
+            actions: row.slice(0, 2)  // 最多2个按钮一排
           })
+          // 如果还有剩余按钮，再添加一行
+          if (row.length > 2) {
+            elements.push({
+              tag: "action",
+              layout: "bisected",
+              actions: row.slice(2, 4)
+            })
+          }
         }
       }
     }
@@ -951,7 +950,7 @@ const adapter = new class LarkAdapter {
     const operator = data.event && data.event.operator
     const openId = data.open_id || (data.body && data.body.open_id) || (data.event && data.event.open_id) || (operator && operator.open_id)
     const userId = data.user_id || (data.body && data.body.user_id) || (data.event && data.event.user_id) || (operator && operator.user_id)
-    const chatId = data.chat_id || (data.body && data.body.chat_id) || (data.event && data.event.chat_id) || data.open_chat_id || (data.event && data.event.open_chat_id)
+    const chatId = data.chat_id || (data.body && data.body.chat_id) || (data.event && data.event.chat_id) || data.open_chat_id
     const chatType = data.chat_type || (data.body && data.body.chat_type) || (data.event && data.event.chat_type) || (chatId ? "group" : "p2p")
     
     Bot.makeLog("debug", `用户信息: openId=${openId}, userId=${userId}, chatId=${chatId}, chatType=${chatType}`, id)
