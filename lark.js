@@ -65,12 +65,92 @@ const adapter = new class LarkAdapter {
           content.msg_type = "file"
           content.content = { file_key: await this.uploadFile(i.file, client) }
           break
+        case "node":
+          // 合并转发消息，转换为文本
+          content.content.text += this.parseNodeMessage(i.data)
+          break
+        case "button":
+          // 按钮消息，使用交互式卡片
+          return this.makeButtonCard(i.data)
+        case "raw":
+          // 原始消息，直接返回
+          return { content: i.data, files }
         default:
           content.content.text += JSON.stringify(i)
       }
     }
     
     return { content, files }
+  }
+
+  parseNodeMessage(data) {
+    let text = ""
+    if (Array.isArray(data)) {
+      for (const node of data) {
+        if (node.message) {
+          if (typeof node.message === "string") {
+            text += node.message + "\n"
+          } else if (Array.isArray(node.message)) {
+            for (const msg of node.message) {
+              if (typeof msg === "string") {
+                text += msg + "\n"
+              } else if (msg.type === "button" && msg.data) {
+                // 按钮数据，添加提示
+                text += "[按钮消息，请在飞书客户端查看]\n"
+              } else {
+                text += JSON.stringify(msg) + "\n"
+              }
+            }
+          }
+        }
+      }
+    }
+    return text
+  }
+
+  makeButtonCard(buttonData) {
+    // 飞书交互式卡片格式
+    const card = {
+      msg_type: "interactive",
+      card: {
+        config: {
+          wide_screen_mode: true
+        },
+        elements: []
+      }
+    }
+
+    // 处理按钮数据
+    if (Array.isArray(buttonData)) {
+      for (const row of buttonData) {
+        if (Array.isArray(row)) {
+          const actions = []
+          for (const btn of row) {
+            if (btn.text && btn.callback) {
+              actions.push({
+                tag: "button",
+                text: {
+                  tag: "plain_text",
+                  content: btn.text
+                },
+                type: "primary",
+                value: {
+                  callback: btn.callback
+                }
+              })
+            }
+          }
+          if (actions.length > 0) {
+            card.card.elements.push({
+              tag: "action",
+              actions: actions
+            })
+          }
+        }
+      }
+    }
+
+    return { content: card, files: [] }
   }
 
   async uploadImage(file, client) {
@@ -142,15 +222,26 @@ const adapter = new class LarkAdapter {
     const { content } = await this.makeMsg(msg, data.bot)
     Bot.makeLog("info", `发送消息：[${data.id}] msg_type=${content.msg_type}, content=${JSON.stringify(content.content)}`, data.self_id)
     
+    // 构建消息数据
+    const messageData = {
+      receive_id: data.id,
+      msg_type: content.msg_type,
+    }
+
+    // 根据消息类型设置内容
+    if (content.msg_type === "interactive") {
+      // 交互式卡片，直接传递 card 对象
+      messageData.card = content.card
+    } else {
+      // 其他类型，content 需要序列化为 JSON 字符串
+      messageData.content = JSON.stringify(content.content)
+    }
+    
     const ret = await data.bot.im.message.create({
       params: {
         receive_id_type: data.message_type === 'private' ? 'user_id' : 'chat_id',
       },
-      data: {
-        receive_id: data.id,
-        msg_type: content.msg_type,
-        content: JSON.stringify(content.content),
-      }
+      data: messageData
     })
     
     return { data: ret, message_id: ret.data?.message_id }
