@@ -85,7 +85,10 @@ const adapter = new class LarkAdapter {
       }
     })
     Bot.makeLog("debug", `上传图片结果: ${JSON.stringify(ret)}`, "Lark")
-    return ret.data?.image_key
+    // 处理两种可能的返回格式：{image_key: "..."} 或 {data: {image_key: "..."}}
+    const imageKey = ret?.image_key || ret?.data?.image_key
+    Bot.makeLog("debug", `提取的 image_key: ${imageKey}`, "Lark")
+    return imageKey
   }
 
   async uploadVideo(file, client) {
@@ -101,7 +104,10 @@ const adapter = new class LarkAdapter {
       }
     })
     Bot.makeLog("debug", `上传视频结果: ${JSON.stringify(ret)}`, "Lark")
-    return ret.data?.file_key
+    // 处理两种可能的返回格式
+    const fileKey = ret?.file_key || ret?.data?.file_key
+    Bot.makeLog("debug", `提取的 video_key: ${fileKey}`, "Lark")
+    return fileKey
   }
 
   async uploadFile(file, client) {
@@ -125,7 +131,10 @@ const adapter = new class LarkAdapter {
       }
     })
     Bot.makeLog("debug", `上传文件结果: ${JSON.stringify(ret)}`, "Lark")
-    return ret.data?.file_key
+    // 处理两种可能的返回格式
+    const fileKey = ret?.file_key || ret?.data?.file_key
+    Bot.makeLog("debug", `提取的 file_key: ${fileKey}`, "Lark")
+    return fileKey
   }
 
   async sendMsg(data, msg) {
