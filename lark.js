@@ -1004,10 +1004,11 @@ const adapter = new class LarkAdapter {
       }, 2)
     }
 
-    Bot.makeLog("info", `触发消息事件: ${safeStringify(eventData)}`, id)
+    Bot.makeLog("info", `触发消息事件：${safeStringify(eventData)}`, id)
 
     // 触发消息事件，让 Yunzai 处理指令
-    Bot.em("message", eventData)
+    // 使用特定的事件类型（message.group 或 message.private）
+    Bot.em(`message.${eventData.message_type}`, eventData)
 
     // 返回成功响应给飞书
     return {
