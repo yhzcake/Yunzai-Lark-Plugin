@@ -1077,13 +1077,15 @@ const adapter = new class LarkAdapter {
             // 同时展开 event 和 operator 中的字段
             const eventData = decryptedData.event || {}
             const operatorData = eventData.operator || {}
+            // 删除 decryptedData 中的 event 字段，避免覆盖展开后的数据
+            const { event, ...restData } = decryptedData
             const cardData = {
-              ...decryptedData,
+              ...restData,
               ...eventData,
               ...operatorData,
               action: action
             }
-            Bot.makeLog("debug", `合并后的 cardData: ${JSON.stringify(cardData).substring(0, 300)}`, id)
+            Bot.makeLog("debug", `合并后的 cardData keys: ${Object.keys(cardData).join(", ")}`, id)
             const result = await this.handleCardAction(id, cardData)
             Bot.makeLog("info", `卡片动作处理结果: ${JSON.stringify(result)}`, id)
             res.json(result || { code: 0 })
