@@ -41,7 +41,11 @@ const adapter = new class LarkAdapter {
           break
         case "image":
           content.msg_type = "image"
-          content.content = { image_key: await this.uploadImage(i.file, client) }
+          Bot.makeLog("debug", `开始处理图片消息: ${i.file}`, "Lark")
+          const imageKey = await this.uploadImage(i.file, client)
+          Bot.makeLog("debug", `获取到 image_key: ${imageKey}`, "Lark")
+          content.content = { image_key: imageKey }
+          Bot.makeLog("debug", `设置后的 content: ${JSON.stringify(content.content)}`, "Lark")
           break
         case "at":
           if (i.qq === "all") {
@@ -125,8 +129,9 @@ const adapter = new class LarkAdapter {
   }
 
   async sendMsg(data, msg) {
+    Bot.makeLog("debug", `sendMsg 开始处理消息`, data.self_id)
     const { content } = await this.makeMsg(msg, data.bot)
-    Bot.makeLog("info", `发送消息：[${data.id}] ${JSON.stringify(content)}`, data.self_id)
+    Bot.makeLog("info", `发送消息：[${data.id}] msg_type=${content.msg_type}, content=${JSON.stringify(content.content)}`, data.self_id)
     
     const ret = await data.bot.im.message.create({
       params: {
