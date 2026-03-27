@@ -41,7 +41,7 @@ const adapter = new class LarkAdapter {
           break
         case "image":
           content.msg_type = "image"
-          content.content.image_key = await this.uploadImage(i.file, client)
+          content.content = { image_key: await this.uploadImage(i.file, client) }
           break
         case "at":
           if (i.qq === "all") {
@@ -55,11 +55,11 @@ const adapter = new class LarkAdapter {
           break
         case "video":
           content.msg_type = "video"
-          content.content.video_key = await this.uploadVideo(i.file, client)
+          content.content = { video_key: await this.uploadVideo(i.file, client) }
           break
         case "file":
           content.msg_type = "file"
-          content.content.file_key = await this.uploadFile(i.file, client)
+          content.content = { file_key: await this.uploadFile(i.file, client) }
           break
         default:
           content.content.text += JSON.stringify(i)
