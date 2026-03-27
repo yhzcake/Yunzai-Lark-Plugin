@@ -976,12 +976,12 @@ const adapter = new class LarkAdapter {
     // 构造消息数据，模拟用户发送指令
     const eventData = {
       self_id: id,
+      bot: Bot[id],
+      post_type: "message",
       user_id: `lark_${userId || openId}`,
       message_type: chatType === "p2p" ? "private" : "group",
       message: [{ type: "text", text: callback }],
       raw_message: callback,
-      // 传递完整的 bot 对象
-      bot: Bot[id]
     }
 
     // 如果是群聊，设置群ID
