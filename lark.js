@@ -28,6 +28,14 @@ const adapter = new class LarkAdapter {
     if (!Array.isArray(msg))
       msg = [msg]
     
+    // 检查消息中是否包含按钮
+    const hasButton = msg.some(i => i && i.type === "button")
+    
+    // 如果包含按钮，使用交互式卡片承载所有内容
+    if (hasButton) {
+      return this.makeMixedCard(msg, client)
+    }
+    
     const content = { msg_type: "text", content: { text: "" } }
     const files = []
     
@@ -70,9 +78,6 @@ const adapter = new class LarkAdapter {
           // 合并转发消息，使用 post 富文本格式
           Bot.makeLog("debug", `处理 node 消息: ${JSON.stringify(i.data).substring(0, 200)}`, "Lark")
           return this.makeForwardCard(i.data)
-        case "button":
-          // 按钮消息，使用交互式卡片
-          return this.makeButtonCard(i.data)
         case "raw":
           // 原始消息，直接返回
           return { content: i.data, files }
@@ -82,6 +87,119 @@ const adapter = new class LarkAdapter {
     }
     
     return { content, files }
+  }
+
+  async makeMixedCard(msg, client) {
+    // 创建混合内容卡片（支持文本、图片、按钮等）
+    const elements = []
+    let textContent = ""
+    const actions = []
+    
+    for (let i of msg) {
+      if (typeof i !== "object")
+        i = { type: "text", text: i }
+      
+      switch (i.type) {
+        case "text":
+          textContent += i.text
+          break
+        case "at":
+          if (i.qq === "all") {
+            textContent += `<at user_id="all">@all</at>`
+          } else {
+            textContent += `<at user_id="${i.qq.replace(/^lark_/, "")}"></at>`
+          }
+          break
+        case "image":
+          // 先添加累积的文本
+          if (textContent) {
+            elements.push({
+              tag: "markdown",
+              content: textContent
+            })
+            textContent = ""
+          }
+          // 上传图片并添加图片元素
+          Bot.makeLog("debug", `卡片中处理图片: ${i.file}`, "Lark")
+          try {
+            const imageKey = await this.uploadImage(i.file, client)
+            elements.push({
+              tag: "img",
+              img_key: imageKey,
+              alt: {
+                tag: "plain_text",
+                content: "图片"
+              }
+            })
+          } catch (error) {
+            Bot.makeLog("error", `卡片中图片处理失败: ${error.message}`, "Lark")
+            textContent += "[图片加载失败]"
+          }
+          break
+        case "reply":
+          // 回复消息ID在 sendMsg 中单独处理
+          Bot.makeLog("debug", `卡片中检测到回复消息ID: ${i.id}`, "Lark")
+          break
+        case "button":
+          // 收集按钮
+          if (Array.isArray(i.data)) {
+            for (const row of i.data) {
+              if (Array.isArray(row)) {
+                for (const btn of row) {
+                  if (btn.text && btn.callback) {
+                    actions.push({
+                      tag: "button",
+                      text: {
+                        tag: "plain_text",
+                        content: btn.text
+                      },
+                      type: "primary",
+                      value: {
+                        callback: btn.callback
+                      }
+                    })
+                  }
+                }
+              }
+            }
+          }
+          break
+        default:
+          textContent += JSON.stringify(i)
+      }
+    }
+    
+    // 添加剩余的文本内容
+    if (textContent) {
+      elements.push({
+        tag: "markdown",
+        content: textContent
+      })
+    }
+    
+    // 添加按钮组（如果有）
+    if (actions.length > 0) {
+      elements.push({
+        tag: "action",
+        actions: actions
+      })
+    }
+    
+    // 使用通用卡片模板
+    const cardContent = this.makeCardTemplate({
+      title: "消息",
+      template: "blue",
+      elements: elements,
+      showDivider: false
+    })
+    
+    return { 
+      content: {
+        msg_type: "interactive",
+        content: cardContent
+      }, 
+      files: [] 
+    }
   }
 
   parseNodeMessage(data) {
@@ -781,6 +899,57 @@ const adapter = new class LarkAdapter {
     Bot.em(`message.${data.message_type}`, data)
   }
 
+  async handleCardAction(id, data) {
+    // 处理卡片按钮点击事件
+    // 解析 action 数据
+    const action = data.action || (data.body && data.body.action)
+    if (!action) {
+      Bot.makeLog("warn", `卡片动作事件缺少 action 数据`, id)
+      return { code: -1, msg: "Missing action data" }
+    }
+
+    Bot.makeLog("debug", `卡片动作数据: ${JSON.stringify(action)}`, id)
+
+    // 获取 callback 值
+    const callback = action.value && action.value.callback
+    if (!callback) {
+      Bot.makeLog("warn", `卡片动作缺少 callback 值`, id)
+      return { code: -1, msg: "Missing callback value" }
+    }
+
+    Bot.makeLog("info", `卡片按钮点击: callback=${callback}`, id)
+
+    // 构造消息数据，模拟用户发送指令
+    const eventData = {
+      self_id: id,
+      user_id: data.open_id || (data.body && data.body.open_id),
+      message_type: data.chat_type === "p2p" ? "private" : "group",
+      message: [{ type: "text", text: callback }],
+      raw_message: callback,
+      bot: Bot[id],
+    }
+
+    // 如果是群聊，设置群ID
+    if (eventData.message_type === "group") {
+      eventData.group_id = data.chat_id || (data.body && data.body.chat_id)
+      eventData.group_name = ""
+    }
+
+    // 触发消息事件，让 Yunzai 处理指令
+    Bot.em("message", eventData)
+
+    // 返回成功响应给飞书
+    return {
+      code: 0,
+      data: {
+        toast: {
+          type: "success",
+          content: "指令已执行"
+        }
+      }
+    }
+  }
+
   async load() {
     if (config.app_id && config.app_secret) {
       // 立即注册 webhook 路由（必须在 Yunzai 的 catch-all 路由之前）
@@ -839,7 +1008,23 @@ const adapter = new class LarkAdapter {
           return
         }
 
-        // 处理事件
+        // 检查是否是卡片按钮点击事件
+        // 卡片事件的数据结构包含 action 字段
+        if (data.action || (data.body && data.body.action)) {
+          Bot.makeLog("info", `收到飞书卡片动作事件`, id)
+          try {
+            const result = await this.handleCardAction(id, data)
+            Bot.makeLog("info", `卡片动作处理结果: ${JSON.stringify(result)}`, id)
+            res.json(result || { code: 0 })
+            return
+          } catch (error) {
+            Bot.makeLog("error", `处理卡片动作失败: ${error.message}`, id)
+            res.status(500).json({ code: -1, msg: error.message })
+            return
+          }
+        }
+
+        // 处理普通事件
         // 如果有 encrypt_key，SDK 会自动解密和验证
         // 使用 needCheck: false 跳过额外验证，但 SDK 仍会解密数据
         const result = await eventDispatcher.invoke(data, { needCheck: false })
