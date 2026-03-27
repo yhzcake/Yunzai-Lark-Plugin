@@ -41,10 +41,12 @@
    - `im:message` - 发送和接收消息
    - `im:message:group_at_msg` - 接收群组@消息
    - `im:message:group_at_msg:readonly` - 读取群组@消息
+   - `im:resource` - 读写文件（用于图片）
 
 2. **联系人权限**
    - `contact:user.base:readonly` - 读取用户基本信息
    - `contact:user.email:readonly` - 读取用户邮箱（可选）
+   - `contact:user.employee_id:readonly` -获取user id（可选）
 
 3. **群组权限**
    - `im:chat` - 读取群组信息
@@ -85,13 +87,13 @@
 3. 系统会自动生成一个 Encrypt Key，复制保存
 4. 在同一页面找到 Verification Token，复制保存
 
-### 2.3 获取 Webhook 地址（可选）
+### 2.3 添加 Webhook 地址
 
-如果使用 Webhook 方式接收消息：
+1. 在应用详情页左侧菜单选择「事件与回调」
+2. 订阅方式修改为“将事件发送至开发者服务器”
+3. 请求地址填“http://[你的域名]:[你的yunzai默认端口]/lark/webhook”
 
-1. 在应用详情页左侧菜单选择「事件订阅」
-2. 配置请求地址为你的服务器地址
-3. 例如：`https://your-domain.com/lark/webhook`
+回调配置同理，用于卡片按钮点击
 
 ---
 
@@ -162,12 +164,6 @@ TRSS-Yunzai/
 #lark代理 http://proxy.example.com:8080
 ```
 
-#### 设置 Webhook URL（可选）
-
-```
-#larkWebhook https://your-domain.com/lark/webhook
-```
-
 ### 4.3 查看当前配置
 
 ```
@@ -191,7 +187,7 @@ app_id: "cli_xxxxxxxxxxxxxxxx"
 app_secret: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 encrypt_key: ""
 verification_token: ""
-webhook_url: ""
+webhook_path: "/lark/webhook"
 proxy: ""
 ```
 
