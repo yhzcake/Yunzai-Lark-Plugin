@@ -191,21 +191,17 @@ const adapter = new class LarkAdapter {
             actions: row
           })
         } else {
-          // 多个按钮使用一个 action 标签，通过 layout 控制排列
-          // 或者使用多个 action 标签并排
-          elements.push({
-            tag: "action",
-            layout: "bisected",  // 双列布局
-            actions: row.slice(0, 2)  // 最多2个按钮一排
-          })
-          // 如果还有剩余按钮，再添加一行
-          if (row.length > 2) {
-            elements.push({
+          // 多个按钮使用多个 action 标签并排
+          // 飞书卡片中，action 标签不支持 layout 属性，需要手动排列
+          const actionElements = []
+          for (let i = 0; i < row.length; i += 2) {
+            const buttonPair = row.slice(i, i + 2)
+            actionElements.push({
               tag: "action",
-              layout: "bisected",
-              actions: row.slice(2, 4)
+              actions: buttonPair
             })
           }
+          elements.push(...actionElements)
         }
       }
     }
@@ -954,6 +950,8 @@ const adapter = new class LarkAdapter {
     const chatType = data.chat_type || (data.body && data.body.chat_type) || (data.event && data.event.chat_type) || (chatId ? "group" : "p2p")
     
     Bot.makeLog("debug", `用户信息: openId=${openId}, userId=${userId}, chatId=${chatId}, chatType=${chatType}`, id)
+    Bot.makeLog("debug", `data.chat_id: ${data.chat_id}, data.open_chat_id: ${data.open_chat_id}`, id)
+    Bot.makeLog("debug", `data.event.chat_id: ${data.event && data.event.chat_id}, data.event.open_chat_id: ${data.event && data.event.open_chat_id}`, id)
     
     if (!openId && !userId) {
       Bot.makeLog("error", `无法获取用户信息`, id)
@@ -1086,6 +1084,7 @@ const adapter = new class LarkAdapter {
               action: action
             }
             Bot.makeLog("debug", `合并后的 cardData keys: ${Object.keys(cardData).join(", ")}`, id)
+            Bot.makeLog("debug", `eventData 内容: ${JSON.stringify(eventData).substring(0, 200)}`, id)
             const result = await this.handleCardAction(id, cardData)
             Bot.makeLog("info", `卡片动作处理结果: ${JSON.stringify(result)}`, id)
             res.json(result || { code: 0 })
