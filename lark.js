@@ -447,9 +447,6 @@ const adapter = new class LarkAdapter {
 
     Bot[id].eventDispatcher = eventDispatcher
 
-    // 启动 webhook 服务器
-    this.startWebhookServer(id, eventDispatcher)
-
     Bot.makeLog("mark", `${this.name}(${this.id}) ${this.version} 已连接`, id)
     Bot.em(`connect.${id}`, { self_id: id })
     return true
@@ -497,8 +494,19 @@ const adapter = new class LarkAdapter {
     Bot.em(`message.${data.message_type}`, data)
   }
 
-  startWebhookServer(id, eventDispatcher) {
+  async load() {
+    if (config.app_id && config.app_secret) {
+      // 立即注册 webhook 路由（必须在 Yunzai 的 catch-all 路由之前）
+      // 注意：这里不等待 connect 完成，立即注册路由
+      this.registerWebhookRoute(config.app_id)
+      // 延迟连接飞书客户端（获取 token 等）
+      await Bot.sleep(1000, this.connect(config.app_id, config.app_secret))
+    }
+  }
+
+  registerWebhookRoute(app_id) {
     const webhookPath = config.webhook_path || "/lark/webhook"
+    const id = `lark_${app_id}`
 
     // 使用 Yunzai 的 express 服务器
     Bot.express.post(webhookPath, async (req, res) => {
@@ -509,6 +517,15 @@ const adapter = new class LarkAdapter {
           ...req.body
         }
         Bot.makeLog("info", `收到飞书 webhook: ${JSON.stringify(data)}`, id)
+
+        // 如果没有这个 bot 的连接，返回错误
+        if (!Bot[id] || !Bot[id].eventDispatcher) {
+          Bot.makeLog("error", `飞书 bot 未连接: ${id}`, id)
+          res.status(503).json({ code: -1, msg: "Bot not connected" })
+          return
+        }
+
+        const eventDispatcher = Bot[id].eventDispatcher
 
         // 如果有加密，手动解密查看内容（调试用）
         if (data.encrypt && config.encrypt_key) {
@@ -548,12 +565,6 @@ const adapter = new class LarkAdapter {
     })
 
     Bot.makeLog("mark", `飞书 webhook 已注册: POST ${webhookPath}`, id)
-  }
-
-  async load() {
-    if (config.app_id && config.app_secret) {
-      await Bot.sleep(1000, this.connect(config.app_id, config.app_secret))
-    }
   }
 }
 
