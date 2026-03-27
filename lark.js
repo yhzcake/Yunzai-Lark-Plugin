@@ -1075,11 +1075,16 @@ const adapter = new class LarkAdapter {
           Bot.makeLog("info", `收到飞书卡片动作事件`, id)
           try {
             // 将 action 数据放到根级别，方便 handleCardAction 处理
+            // 同时展开 event 和 operator 中的字段
+            const eventData = decryptedData.event || {}
+            const operatorData = eventData.operator || {}
             const cardData = {
               ...decryptedData,
-              ...(decryptedData.event || {}),
+              ...eventData,
+              ...operatorData,
               action: action
             }
+            Bot.makeLog("debug", `合并后的 cardData: ${JSON.stringify(cardData).substring(0, 300)}`, id)
             const result = await this.handleCardAction(id, cardData)
             Bot.makeLog("info", `卡片动作处理结果: ${JSON.stringify(result)}`, id)
             res.json(result || { code: 0 })
