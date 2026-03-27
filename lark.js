@@ -93,7 +93,7 @@ const adapter = new class LarkAdapter {
     // 创建混合内容卡片（支持文本、图片、按钮等）
     const elements = []
     let textContent = ""
-    const actions = []
+    const buttonRows = []
     
     for (let i of msg) {
       if (typeof i !== "object")
@@ -141,13 +141,14 @@ const adapter = new class LarkAdapter {
           Bot.makeLog("debug", `卡片中检测到回复消息ID: ${i.id}`, "Lark")
           break
         case "button":
-          // 收集按钮
+          // 收集按钮，保持原有的行列结构
           if (Array.isArray(i.data)) {
             for (const row of i.data) {
               if (Array.isArray(row)) {
+                const buttonRow = []
                 for (const btn of row) {
                   if (btn.text && btn.callback) {
-                    actions.push({
+                    buttonRow.push({
                       tag: "button",
                       text: {
                         tag: "plain_text",
@@ -159,6 +160,9 @@ const adapter = new class LarkAdapter {
                       }
                     })
                   }
+                }
+                if (buttonRow.length > 0) {
+                  buttonRows.push(buttonRow)
                 }
               }
             }
@@ -177,12 +181,34 @@ const adapter = new class LarkAdapter {
       })
     }
     
-    // 添加按钮组（如果有）
-    if (actions.length > 0) {
-      elements.push({
-        tag: "action",
-        actions: actions
-      })
+    // 添加按钮组（使用多列布局，每行最多3个按钮）
+    if (buttonRows.length > 0) {
+      for (const row of buttonRows) {
+        if (row.length === 1) {
+          // 单个按钮使用 action 标签
+          elements.push({
+            tag: "action",
+            actions: row
+          })
+        } else {
+          // 多个按钮使用 column_set 实现多列布局
+          const columns = row.map(btn => ({
+            tag: "column",
+            width: "auto",
+            elements: [{
+              tag: "action",
+              actions: [btn]
+            }]
+          }))
+          
+          elements.push({
+            tag: "column_set",
+            flex_mode: "none",
+            background_style: "default",
+            columns: columns
+          })
+        }
+      }
     }
     
     // 使用通用卡片模板
@@ -921,9 +947,10 @@ const adapter = new class LarkAdapter {
 
     Bot.makeLog("info", `卡片按钮点击: callback=${callback}`, id)
 
-    // 获取用户信息（可能在根级别、body 或 event 中）
-    const openId = data.open_id || (data.body && data.body.open_id) || (data.event && data.event.open_id)
-    const userId = data.user_id || (data.body && data.body.user_id) || (data.event && data.event.user_id)
+    // 获取用户信息（可能在根级别、body、event 或 event.operator 中）
+    const operator = data.event && data.event.operator
+    const openId = data.open_id || (data.body && data.body.open_id) || (data.event && data.event.open_id) || (operator && operator.open_id)
+    const userId = data.user_id || (data.body && data.body.user_id) || (data.event && data.event.user_id) || (operator && operator.user_id)
     const chatId = data.chat_id || (data.body && data.body.chat_id) || (data.event && data.event.chat_id)
     const chatType = data.chat_type || (data.body && data.body.chat_type) || (data.event && data.event.chat_type)
     
