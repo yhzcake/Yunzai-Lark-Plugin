@@ -954,6 +954,7 @@ const adapter = new class LarkAdapter {
     // 检查所有可能的聊天ID字段名
     const chatId = data.chat_id || (data.body && data.body.chat_id) || (data.event && data.event.chat_id) || 
                    data.open_chat_id || (data.event && data.event.open_chat_id) ||
+                   (data.context && data.context.open_chat_id) || (data.event && data.event.context && data.event.context.open_chat_id) ||
                    data.chatId || (data.event && data.event.chatId) ||
                    data.openChatId || (data.event && data.event.openChatId)
     
@@ -979,7 +980,12 @@ const adapter = new class LarkAdapter {
       message_type: chatType === "p2p" ? "private" : "group",
       message: [{ type: "text", text: callback }],
       raw_message: callback,
-      bot: Bot[id],
+      // 避免循环引用，只传递必要的信息
+      bot: {
+        uin: id,
+        nickname: "LarkBot",
+        adapter: this
+      },
     }
 
     // 如果是群聊，设置群ID
@@ -988,7 +994,7 @@ const adapter = new class LarkAdapter {
       eventData.group_name = ""
     }
 
-    Bot.makeLog("info", `触发消息事件: ${JSON.stringify(eventData)}`, id)
+    Bot.makeLog("info", `触发消息事件: ${JSON.stringify(eventData, null, 2)}`, id)
 
     // 触发消息事件，让 Yunzai 处理指令
     Bot.em("message", eventData)
