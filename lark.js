@@ -10,7 +10,7 @@ const { config, configSave } = await makeConfig("Lark", {
   app_secret: "",
   encrypt_key: "",
   verification_token: "",
-  webhook_url: "",
+  webhook_path: "/lark/webhook",
   proxy: "",
 }, {
   tips: [
@@ -427,9 +427,99 @@ const adapter = new class LarkAdapter {
     Object.defineProperty(Bot[id], "gl", { get() { return this.getGroupMap() }})
     Object.defineProperty(Bot[id], "gml", { get() { return this.getGroupMemberMap() }})
 
+    // 创建事件分发器处理消息事件
+    const eventDispatcher = new lark.EventDispatcher({
+      verificationToken: config.verification_token,
+      encryptKey: config.encrypt_key,
+    })
+
+    // 注册消息接收事件
+    eventDispatcher.register({
+      "im.message.receive_v1": async (data) => {
+        Bot.makeLog("info", `收到飞书消息事件: ${JSON.stringify(data)}`, id)
+        await this.handleMessage(id, data)
+      },
+    })
+
+    Bot[id].eventDispatcher = eventDispatcher
+
+    // 启动 webhook 服务器
+    this.startWebhookServer(id, eventDispatcher)
+
     Bot.makeLog("mark", `${this.name}(${this.id}) ${this.version} 已连接`, id)
     Bot.em(`connect.${id}`, { self_id: id })
     return true
+  }
+
+  async handleMessage(id, eventData) {
+    const { message, sender } = eventData
+    if (!message) return
+
+    const data = {
+      self_id: id,
+      bot: Bot[id],
+      post_type: "message",
+      message_id: message.message_id,
+      user_id: `lark_${sender.sender_id.user_id}`,
+      sender: {
+        user_id: `lark_${sender.sender_id.user_id}`,
+        nickname: sender.sender_id.user_id,
+      },
+      raw_message: "",
+      message: [],
+    }
+
+    // 判断是私聊还是群聊
+    if (message.chat_type === "group") {
+      data.message_type = "group"
+      data.group_id = `lark_${message.chat_id}`
+    } else {
+      data.message_type = "private"
+      data.group_id = undefined
+    }
+
+    // 解析消息内容
+    const content = JSON.parse(message.content)
+    if (content.text) {
+      data.message.push({ type: "text", text: content.text })
+      data.raw_message += content.text
+    }
+
+    Bot.makeLog("info", `飞书${data.message_type === "group" ? "群" : "私聊"}消息：[${data.user_id}] ${data.raw_message}`, id)
+    Bot.em(`message.${data.message_type}`, data)
+  }
+
+  startWebhookServer(id, eventDispatcher) {
+    const webhookPath = config.webhook_path || "/lark/webhook"
+
+    // 使用 Yunzai 的 express 服务器
+    Bot.express.use(webhookPath, async (req, res) => {
+      if (req.method !== "POST") {
+        res.statusCode = 405
+        res.end("Method Not Allowed")
+        return
+      }
+
+      try {
+        const data = req.body
+        Bot.makeLog("debug", `收到飞书 webhook: ${JSON.stringify(data)}`, id)
+        
+        // 处理 challenge 请求（配置 webhook 时飞书会发送验证请求）
+        if (data.challenge) {
+          res.json({ challenge: data.challenge })
+          return
+        }
+
+        // 处理事件
+        const result = await eventDispatcher.invoke(data)
+        res.json(result || { code: 0 })
+      } catch (error) {
+        Bot.makeLog("error", `处理飞书 webhook 失败: ${error.message}`, id)
+        res.status(500).json({ code: -1, msg: error.message })
+      }
+    })
+
+    Bot.makeLog("mark", `飞书 webhook 已注册: ${webhookPath}`, id)
   }
 
   async load() {
@@ -468,7 +558,7 @@ export class LarkPlugin extends plugin {
   }
 
   List() {
-    this.reply(`App ID: ${config.app_id}\nWebhook: ${config.webhook_url}`, true)
+    this.reply(`App ID: ${config.app_id}\nWebhook: ${config.webhook_path}`, true)
   }
 
   async Config() {
