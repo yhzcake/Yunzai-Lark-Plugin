@@ -67,7 +67,10 @@ const adapter = new class LarkAdapter {
           break
         case "node":
           // 合并转发消息，转换为文本
-          content.content.text += this.parseNodeMessage(i.data)
+          Bot.makeLog("debug", `处理 node 消息: ${JSON.stringify(i.data).substring(0, 200)}`, "Lark")
+          const nodeText = this.parseNodeMessage(i.data)
+          content.content.text += nodeText
+          Bot.makeLog("debug", `node 消息转换后: ${nodeText.substring(0, 100)}`, "Lark")
           break
         case "button":
           // 按钮消息，使用交互式卡片
@@ -87,6 +90,7 @@ const adapter = new class LarkAdapter {
     let text = ""
     if (Array.isArray(data)) {
       for (const node of data) {
+        // node 结构: { message: "..." } 或 { message: [...] }
         if (node.message) {
           if (typeof node.message === "string") {
             text += node.message + "\n"
@@ -94,7 +98,7 @@ const adapter = new class LarkAdapter {
             for (const msg of node.message) {
               if (typeof msg === "string") {
                 text += msg + "\n"
-              } else if (msg.type === "button" && msg.data) {
+              } else if (typeof msg === "object" && msg.type === "button" && msg.data) {
                 // 按钮数据，添加提示
                 text += "[按钮消息，请在飞书客户端查看]\n"
               } else {
@@ -105,6 +109,7 @@ const adapter = new class LarkAdapter {
         }
       }
     }
+    Bot.makeLog("debug", `parseNodeMessage 结果: ${text.substring(0, 100)}...`, "Lark")
     return text
   }
 
