@@ -112,73 +112,118 @@ const adapter = new class LarkAdapter {
   }
 
   makeForwardCard(nodeData) {
-    // 飞书合并转发消息使用 post 富文本格式
-    const post = {
-      msg_type: "post",
-      content: {
-        post: {
-          zh_cn: {
-            title: "",
-            content: []
-          }
-        }
-      }
-    }
-
+    // 使用通用卡片模板创建合并转发消息
+    const elements = []
+    
     if (Array.isArray(nodeData)) {
       for (const node of nodeData) {
         if (node.message) {
-          const paragraph = []
+          let textContent = ""
+          
           if (typeof node.message === "string") {
-            paragraph.push({
-              tag: "text",
-              text: node.message
-            })
+            textContent = node.message
           } else if (Array.isArray(node.message)) {
+            const texts = []
             for (const msg of node.message) {
               if (typeof msg === "string") {
-                paragraph.push({
-                  tag: "text",
-                  text: msg
-                })
+                texts.push(msg)
               } else if (typeof msg === "object") {
                 if (msg.type === "button" && msg.data) {
-                  // 按钮显示为文本提示
-                  paragraph.push({
-                    tag: "text",
-                    text: "[按钮消息]"
-                  })
+                  texts.push("[按钮消息]")
                 } else {
-                  paragraph.push({
-                    tag: "text",
-                    text: JSON.stringify(msg)
-                  })
+                  texts.push(JSON.stringify(msg))
                 }
               }
             }
+            textContent = texts.join("\n")
           }
-          if (paragraph.length > 0) {
-            post.content.post.zh_cn.content.push(paragraph)
+          
+          if (textContent) {
+            elements.push(textContent)
           }
         }
       }
     }
 
-    Bot.makeLog("debug", `makeForwardCard 结果: ${JSON.stringify(post).substring(0, 200)}`, "Lark")
-    return { content: post, files: [] }
+    // 使用通用卡片模板
+    const cardContent = this.makeCardTemplate({
+      title: "合并转发消息",
+      template: "blue",
+      elements: elements
+    })
+
+    Bot.makeLog("debug", `makeForwardCard 结果: ${JSON.stringify(cardContent).substring(0, 200)}`, "Lark")
+    return { 
+      content: {
+        msg_type: "interactive",
+        content: cardContent
+      }, 
+      files: [] 
+    }
+  }
+
+  makeCardTemplate(options) {
+    // 通用卡片模板
+    // options: {
+    //   title: string,        // 卡片标题
+    //   template: string,     // 主题颜色: blue, red, green, orange, grey
+    //   elements: array,      // 内容元素数组（字符串或对象）
+    //   showDivider: boolean  // 是否显示分割线（默认true）
+    // }
+    const { 
+      title = "消息", 
+      template = "blue", 
+      elements = [],
+      showDivider = true 
+    } = options
+
+    const cardContent = {
+      schema: "2.0",
+      header: {
+        title: {
+          tag: "plain_text",
+          content: title
+        },
+        template: template,
+        padding: "12px 12px 12px 12px"
+      },
+      body: {
+        elements: [],
+        padding: "12px 12px 12px 12px"
+      }
+    }
+
+    // 处理内容元素
+    elements.forEach((element, index) => {
+      if (typeof element === "string") {
+        // 文本内容使用 markdown
+        cardContent.body.elements.push({
+          tag: "markdown",
+          content: element,
+          text_align: "left",
+          text_size: "normal_v2",
+          margin: "0px 0px 8px 0px"
+        })
+      } else if (typeof element === "object") {
+        // 对象类型直接添加（支持自定义元素）
+        cardContent.body.elements.push(element)
+      }
+
+      // 添加分割线（除了最后一个元素）
+      if (showDivider && index < elements.length - 1) {
+        cardContent.body.elements.push({
+          tag: "hr",
+          margin: "8px 0px 8px 0px"
+        })
+      }
+    })
+
+    return cardContent
   }
 
   makeButtonCard(buttonData) {
-    // 飞书交互式卡片格式
-    const card = {
-      msg_type: "interactive",
-      card: {
-        config: {
-          wide_screen_mode: true
-        },
-        elements: []
-      }
-    }
+    // 使用通用卡片模板创建按钮卡片
+    const elements = []
 
     // 处理按钮数据
     if (Array.isArray(buttonData)) {
@@ -201,7 +246,7 @@ const adapter = new class LarkAdapter {
             }
           }
           if (actions.length > 0) {
-            card.card.elements.push({
+            elements.push({
               tag: "action",
               actions: actions
             })
@@ -210,7 +255,21 @@ const adapter = new class LarkAdapter {
       }
     }
 
-    return { content: card, files: [] }
+    // 使用通用卡片模板
+    const cardContent = this.makeCardTemplate({
+      title: "操作",
+      template: "green",
+      elements: elements,
+      showDivider: false
+    })
+
+    return { 
+      content: {
+        msg_type: "interactive",
+        content: cardContent
+      }, 
+      files: [] 
+    }
   }
 
   async uploadImage(file, client) {
@@ -300,13 +359,13 @@ const adapter = new class LarkAdapter {
 
     // 根据消息类型设置内容（所有类型的 content 都需要是 JSON 字符串）
     if (content.msg_type === "interactive") {
-      // 交互式卡片
-      messageData.content = JSON.stringify(content.card)
+      // 交互式卡片 - content 是 card 对象
+      messageData.content = JSON.stringify(content.content)
     } else if (content.msg_type === "post") {
-      // 富文本消息
+      // 富文本消息 - content 是 post 对象
       messageData.content = JSON.stringify(content.content)
     } else {
-      // 其他类型
+      // 其他类型（text, image, video, file）
       messageData.content = JSON.stringify(content.content)
     }
     
