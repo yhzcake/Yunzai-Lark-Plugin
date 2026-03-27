@@ -124,8 +124,8 @@ const adapter = new class LarkAdapter {
   }
 
   async sendFriendMsg(data, msg) {
-    const friendInfo = await this.getFriendInfo(data)
-    data.id = friendInfo.user_id.replace(/^lark_/, "")
+    // 直接使用 user_id，不需要调用 getFriendInfo（避免权限问题）
+    data.id = data.user_id.replace(/^lark_/, "")
     data.message_type = 'private'
     return this.sendMsg(data, msg)
   }
@@ -140,7 +140,8 @@ const adapter = new class LarkAdapter {
   }
 
   async getFriendMsg(data, message_id) {
-    data.id = (await this.getFriendInfo(data)).user_id.replace(/^lark_/, "")
+    // 直接使用 user_id，不需要调用 getFriendInfo（避免权限问题）
+    data.id = data.user_id.replace(/^lark_/, "")
     return this.getMsg(data, message_id)
   }
 
@@ -154,7 +155,8 @@ const adapter = new class LarkAdapter {
   }
 
   async recallFriendMsg(data, message_id) {
-    data.id = (await this.getFriendInfo(data)).user_id.replace(/^lark_/, "")
+    // 直接使用 user_id，不需要调用 getFriendInfo（避免权限问题）
+    data.id = data.user_id.replace(/^lark_/, "")
     return this.recallMsg(data, message_id)
   }
 
