@@ -437,7 +437,11 @@ const adapter = new class LarkAdapter {
     eventDispatcher.register({
       "im.message.receive_v1": async (data) => {
         Bot.makeLog("info", `收到飞书消息事件: ${JSON.stringify(data)}`, id)
-        await this.handleMessage(id, data)
+        try {
+          await this.handleMessage(id, data)
+        } catch (error) {
+          Bot.makeLog("error", `处理飞书消息失败: ${error.message}`, id)
+        }
       },
     })
 
@@ -452,8 +456,12 @@ const adapter = new class LarkAdapter {
   }
 
   async handleMessage(id, eventData) {
+    Bot.makeLog("debug", `handleMessage 收到数据: ${JSON.stringify(eventData)}`, id)
     const { message, sender } = eventData
-    if (!message) return
+    if (!message) {
+      Bot.makeLog("warn", `handleMessage 没有 message 字段`, id)
+      return
+    }
 
     const data = {
       self_id: id,
@@ -507,13 +515,13 @@ const adapter = new class LarkAdapter {
           ...req.body
         }
         Bot.makeLog("debug", `收到飞书 webhook: ${JSON.stringify(data)}`, id)
-        
+
         // 处理 challenge 请求（配置 webhook 时飞书会发送验证请求）
         // 使用 SDK 的 generateChallenge 处理加密数据
         const { isChallenge, challenge } = lark.generateChallenge(data, {
           encryptKey: config.encrypt_key || ""
         })
-        
+
         if (isChallenge) {
           Bot.makeLog("mark", `飞书 webhook 验证成功`, id)
           res.json(challenge)
@@ -521,7 +529,9 @@ const adapter = new class LarkAdapter {
         }
 
         // 处理事件
-        const result = await eventDispatcher.invoke(data)
+        // 如果有 encrypt_key，SDK 会自动解密和验证
+        // 使用 needCheck: false 跳过额外验证，但 SDK 仍会解密数据
+        const result = await eventDispatcher.invoke(data, { needCheck: false })
         res.json(result || { code: 0 })
       } catch (error) {
         Bot.makeLog("error", `处理飞书 webhook 失败: ${error.message}`, id)
