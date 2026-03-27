@@ -1,5 +1,5 @@
 {
-    "name":"Lark-Plugin",
+    "name":"lark-plugin",
     "type":"module",
     "author":"yhz_cake",
     "dependencies":{

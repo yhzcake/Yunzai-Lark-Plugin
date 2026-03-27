@@ -921,13 +921,18 @@ const adapter = new class LarkAdapter {
 
     Bot.makeLog("info", `卡片按钮点击: callback=${callback}`, id)
 
-    // 获取用户信息
-    const openId = data.open_id || (data.body && data.body.open_id)
-    const userId = data.user_id || (data.body && data.body.user_id)
-    const chatId = data.chat_id || (data.body && data.body.chat_id)
-    const chatType = data.chat_type || (data.body && data.body.chat_type)
+    // 获取用户信息（可能在根级别、body 或 event 中）
+    const openId = data.open_id || (data.body && data.body.open_id) || (data.event && data.event.open_id)
+    const userId = data.user_id || (data.body && data.body.user_id) || (data.event && data.event.user_id)
+    const chatId = data.chat_id || (data.body && data.body.chat_id) || (data.event && data.event.chat_id)
+    const chatType = data.chat_type || (data.body && data.body.chat_type) || (data.event && data.event.chat_type)
     
     Bot.makeLog("debug", `用户信息: openId=${openId}, userId=${userId}, chatId=${chatId}, chatType=${chatType}`, id)
+    
+    if (!openId && !userId) {
+      Bot.makeLog("error", `无法获取用户信息`, id)
+      return { code: -1, msg: "Missing user info" }
+    }
 
     // 构造消息数据，模拟用户发送指令
     const eventData = {
