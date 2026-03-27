@@ -71,37 +71,56 @@ const adapter = new class LarkAdapter {
 
   async uploadImage(file, client) {
     const fileData = await Bot.fileType({ file })
-    const ret = await client.im.file.create({
+    Bot.makeLog("debug", `上传图片: name=${fileData.name}, size=${fileData.buffer?.length}`, "Lark")
+    
+    // 使用 im.image.create 上传图片（不是 im.file.create）
+    const ret = await client.im.image.create({
       data: {
-        file_type: "image",
-        file_name: fileData.name,
-        file: fileData.buffer,
+        image_type: "message",
+        image: fileData.buffer,
       }
     })
-    return ret.data?.file_key
+    Bot.makeLog("debug", `上传图片结果: ${JSON.stringify(ret)}`, "Lark")
+    return ret.data?.image_key
   }
 
   async uploadVideo(file, client) {
     const fileData = await Bot.fileType({ file })
+    Bot.makeLog("debug", `上传视频: name=${fileData.name}, size=${fileData.buffer?.length}`, "Lark")
+    
+    // 视频使用 mp4 类型
     const ret = await client.im.file.create({
       data: {
-        file_type: "video",
-        file_name: fileData.name,
+        file_type: "mp4",
+        file_name: fileData.name || "video.mp4",
         file: fileData.buffer,
       }
     })
+    Bot.makeLog("debug", `上传视频结果: ${JSON.stringify(ret)}`, "Lark")
     return ret.data?.file_key
   }
 
   async uploadFile(file, client) {
     const fileData = await Bot.fileType({ file })
+    Bot.makeLog("debug", `上传文件: name=${fileData.name}, size=${fileData.buffer?.length}`, "Lark")
+    
+    // 根据文件扩展名判断类型
+    const ext = fileData.name?.split('.').pop()?.toLowerCase()
+    let file_type = "stream" // 默认使用 stream
+    
+    if (ext === 'pdf') file_type = "pdf"
+    else if (ext === 'doc' || ext === 'docx') file_type = "doc"
+    else if (ext === 'xls' || ext === 'xlsx') file_type = "xls"
+    else if (ext === 'ppt' || ext === 'pptx') file_type = "ppt"
+    
     const ret = await client.im.file.create({
       data: {
-        file_type: "file",
-        file_name: fileData.name,
+        file_type: file_type,
+        file_name: fileData.name || "file",
         file: fileData.buffer,
       }
     })
+    Bot.makeLog("debug", `上传文件结果: ${JSON.stringify(ret)}`, "Lark")
     return ret.data?.file_key
   }
 
