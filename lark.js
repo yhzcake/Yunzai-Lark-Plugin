@@ -66,12 +66,9 @@ const adapter = new class LarkAdapter {
           content.content = { file_key: await this.uploadFile(i.file, client) }
           break
         case "node":
-          // 合并转发消息，转换为文本
+          // 合并转发消息，使用 post 富文本格式
           Bot.makeLog("debug", `处理 node 消息: ${JSON.stringify(i.data).substring(0, 200)}`, "Lark")
-          const nodeText = this.parseNodeMessage(i.data)
-          content.content.text += nodeText
-          Bot.makeLog("debug", `node 消息转换后: ${nodeText.substring(0, 100)}`, "Lark")
-          break
+          return this.makeForwardCard(i.data)
         case "button":
           // 按钮消息，使用交互式卡片
           return this.makeButtonCard(i.data)
@@ -111,6 +108,63 @@ const adapter = new class LarkAdapter {
     }
     Bot.makeLog("debug", `parseNodeMessage 结果: ${text.substring(0, 100)}...`, "Lark")
     return text
+  }
+
+  makeForwardCard(nodeData) {
+    // 飞书合并转发消息使用 post 富文本格式
+    const post = {
+      msg_type: "post",
+      content: {
+        post: {
+          zh_cn: {
+            title: "",
+            content: []
+          }
+        }
+      }
+    }
+
+    if (Array.isArray(nodeData)) {
+      for (const node of nodeData) {
+        if (node.message) {
+          const paragraph = []
+          if (typeof node.message === "string") {
+            paragraph.push({
+              tag: "text",
+              text: node.message
+            })
+          } else if (Array.isArray(node.message)) {
+            for (const msg of node.message) {
+              if (typeof msg === "string") {
+                paragraph.push({
+                  tag: "text",
+                  text: msg
+                })
+              } else if (typeof msg === "object") {
+                if (msg.type === "button" && msg.data) {
+                  // 按钮显示为文本提示
+                  paragraph.push({
+                    tag: "text",
+                    text: "[按钮消息]"
+                  })
+                } else {
+                  paragraph.push({
+                    tag: "text",
+                    text: JSON.stringify(msg)
+                  })
+                }
+              }
+            }
+          }
+          if (paragraph.length > 0) {
+            post.content.post.zh_cn.content.push(paragraph)
+          }
+        }
+      }
+    }
+
+    Bot.makeLog("debug", `makeForwardCard 结果: ${JSON.stringify(post).substring(0, 200)}`, "Lark")
+    return { content: post, files: [] }
   }
 
   makeButtonCard(buttonData) {
@@ -243,27 +297,38 @@ const adapter = new class LarkAdapter {
       msg_type: content.msg_type,
     }
 
-    // 根据消息类型设置内容
+    // 根据消息类型设置内容（所有类型的 content 都需要是 JSON 字符串）
     if (content.msg_type === "interactive") {
-      // 交互式卡片，直接传递 card 对象
-      messageData.card = content.card
+      // 交互式卡片
+      messageData.content = JSON.stringify(content.card)
+    } else if (content.msg_type === "post") {
+      // 富文本消息
+      messageData.content = JSON.stringify(content.content)
     } else {
-      // 其他类型，content 需要序列化为 JSON 字符串
+      // 其他类型
       messageData.content = JSON.stringify(content.content)
     }
     
-    // 如果有回复消息ID，添加到请求参数中
-    const params = {
-      receive_id_type: data.message_type === 'private' ? 'user_id' : 'chat_id',
-    }
+    // 如果有回复消息ID，使用 message.reply 方法
     if (replyMessageId) {
-      // 飞书回复消息需要设置 reply_in_thread 或使用 message_id 参数
-      // 注意：这里使用 reply_in_thread 参数
-      params.reply_in_thread = true
+      Bot.makeLog("debug", `使用 reply 方法回复消息: ${replyMessageId}`, data.self_id)
+      const ret = await data.bot.im.message.reply({
+        path: {
+          message_id: replyMessageId
+        },
+        data: {
+          msg_type: content.msg_type,
+          content: messageData.content
+        }
+      })
+      return { data: ret, message_id: ret.data?.message_id }
     }
     
+    // 普通消息使用 message.create
     const ret = await data.bot.im.message.create({
-      params: params,
+      params: {
+        receive_id_type: data.message_type === 'private' ? 'user_id' : 'chat_id',
+      },
       data: messageData
     })
     
