@@ -501,7 +501,11 @@ const adapter = new class LarkAdapter {
       }
 
       try {
-        const data = req.body
+        // 构造符合 SDK 要求的数据格式
+        const data = {
+          headers: req.headers,
+          ...req.body
+        }
         Bot.makeLog("debug", `收到飞书 webhook: ${JSON.stringify(data)}`, id)
         
         // 处理 challenge 请求（配置 webhook 时飞书会发送验证请求）
