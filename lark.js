@@ -163,7 +163,8 @@ const adapter = new class LarkAdapter {
   }
 
   makeCardTemplate(options) {
-    // 通用卡片模板
+    // 通用卡片模板 - 使用飞书 Schema V1 格式（与 SDK 类型定义一致）
+    // 参考: node-sdk-main/utils/message-card.ts 中的 defaultCard
     // options: {
     //   title: string,        // 卡片标题
     //   template: string,     // 主题颜色: blue, red, green, orange, grey
@@ -177,43 +178,38 @@ const adapter = new class LarkAdapter {
       showDivider = true 
     } = options
 
+    // Schema V1 格式（与 SDK 类型定义一致）
     const cardContent = {
-      schema: "2.0",
+      config: {
+        wide_screen_mode: true
+      },
       header: {
         title: {
           tag: "plain_text",
           content: title
         },
-        template: template,
-        padding: "12px 12px 12px 12px"
+        template: template
       },
-      body: {
-        elements: [],
-        padding: "12px 12px 12px 12px"
-      }
+      elements: []
     }
 
     // 处理内容元素
     elements.forEach((element, index) => {
       if (typeof element === "string") {
         // 文本内容使用 markdown
-        cardContent.body.elements.push({
+        cardContent.elements.push({
           tag: "markdown",
-          content: element,
-          text_align: "left",
-          text_size: "normal_v2",
-          margin: "0px 0px 8px 0px"
+          content: element
         })
       } else if (typeof element === "object") {
         // 对象类型直接添加（支持自定义元素）
-        cardContent.body.elements.push(element)
+        cardContent.elements.push(element)
       }
 
       // 添加分割线（除了最后一个元素）
       if (showDivider && index < elements.length - 1) {
-        cardContent.body.elements.push({
-          tag: "hr",
-          margin: "8px 0px 8px 0px"
+        cardContent.elements.push({
+          tag: "hr"
         })
       }
     })
@@ -222,7 +218,8 @@ const adapter = new class LarkAdapter {
   }
 
   makeButtonCard(buttonData) {
-    // 使用通用卡片模板创建按钮卡片
+    // 使用通用卡片模板创建按钮卡片 - Schema V1 格式
+    // 参考 SDK 类型定义: InterfaceCardActionElement
     const elements = []
 
     // 处理按钮数据
@@ -232,6 +229,7 @@ const adapter = new class LarkAdapter {
           const actions = []
           for (const btn of row) {
             if (btn.text && btn.callback) {
+              // Schema V1: 按钮放在 actions 数组中
               actions.push({
                 tag: "button",
                 text: {
@@ -245,6 +243,7 @@ const adapter = new class LarkAdapter {
               })
             }
           }
+          // Schema V1: 使用 action 标签包裹按钮
           if (actions.length > 0) {
             elements.push({
               tag: "action",
