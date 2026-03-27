@@ -53,7 +53,6 @@ const adapter = new class LarkAdapter {
           const imageKey = await this.uploadImage(i.file, client)
           Bot.makeLog("debug", `获取到 image_key: ${imageKey}`, "Lark")
           content.content = { image_key: imageKey }
-          Bot.makeLog("debug", `设置后的 content: ${JSON.stringify(content.content)}`, "Lark")
           break
         case "at":
           if (i.qq === "all") {
@@ -63,8 +62,6 @@ const adapter = new class LarkAdapter {
           }
           break
         case "reply":
-          // 回复消息ID在 sendMsg 中单独处理，不添加到文本内容
-          Bot.makeLog("debug", `检测到回复消息ID: ${i.id}，不在文本中显示`, "Lark")
           break
         case "video":
           content.msg_type = "video"
@@ -75,8 +72,6 @@ const adapter = new class LarkAdapter {
           content.content = { file_key: await this.uploadFile(i.file, client) }
           break
         case "node":
-          // 合并转发消息，使用 post 富文本格式
-          Bot.makeLog("debug", `处理 node 消息: ${JSON.stringify(i.data).substring(0, 200)}`, "Lark")
           return this.makeForwardCard(i.data)
         case "raw":
           // 原始消息，直接返回
@@ -479,7 +474,6 @@ const adapter = new class LarkAdapter {
   }
 
   async sendMsg(data, msg) {
-    Bot.makeLog("debug", `sendMsg 开始处理消息`, data.self_id)
     const { content } = await this.makeMsg(msg, data.bot)
     Bot.makeLog("info", `发送消息：[${data.id}] msg_type=${content.msg_type}, content=${JSON.stringify(content.content)}`, data.self_id)
     
@@ -1044,7 +1038,8 @@ const adapter = new class LarkAdapter {
           headers: req.headers,
           ...req.body
         }
-        Bot.makeLog("info", `收到飞书 webhook: ${JSON.stringify(data)}`, id)
+        Bot.makeLog("info", `收到飞书 webhook`, id)
+        Bot.makeLog("debug",`${JSON.stringify(data)}`, id)
 
         // 如果没有这个 bot 的连接，返回错误
         if (!Bot[id] || !Bot[id].eventDispatcher) {
@@ -1061,7 +1056,7 @@ const adapter = new class LarkAdapter {
             const { AESCipher } = lark
             const cipher = new AESCipher(config.encrypt_key)
             const decrypted = cipher.decrypt(data.encrypt)
-            Bot.makeLog("info", `解密后数据: ${decrypted}`, id)
+            Bot.makeLog("debug", `解密后数据: ${decrypted}`, id)
           } catch (e) {
             Bot.makeLog("error", `解密失败: ${e.message}`, id)
           }
@@ -1072,7 +1067,7 @@ const adapter = new class LarkAdapter {
         const { isChallenge, challenge } = lark.generateChallenge(data, {
           encryptKey: config.encrypt_key || ""
         })
-        Bot.makeLog("info", `generateChallenge 结果: isChallenge=${isChallenge}, challenge=${JSON.stringify(challenge)}`, id)
+        Bot.makeLog("debug", `generateChallenge 结果: isChallenge=${isChallenge}, challenge=${JSON.stringify(challenge)}`, id)
 
         if (isChallenge) {
           Bot.makeLog("mark", `飞书 webhook 验证成功`, id)
@@ -1087,7 +1082,7 @@ const adapter = new class LarkAdapter {
             const { AESCipher } = lark
             const cipher = new AESCipher(config.encrypt_key)
             const decrypted = cipher.decrypt(data.encrypt)
-            Bot.makeLog("info", `解密后数据: ${decrypted}`, id)
+            Bot.makeLog("debug", `解密后数据: ${decrypted}`, id)
             decryptedData = JSON.parse(decrypted)
           } catch (e) {
             Bot.makeLog("error", `解密失败: ${e.message}`, id)
@@ -1131,7 +1126,7 @@ const adapter = new class LarkAdapter {
         // 如果有 encrypt_key，SDK 会自动解密和验证
         // 使用 needCheck: false 跳过额外验证，但 SDK 仍会解密数据
         const result = await eventDispatcher.invoke(data, { needCheck: false })
-        Bot.makeLog("info", `事件处理结果: ${JSON.stringify(result)}`, id)
+        Bot.makeLog("debug", `事件处理结果: ${JSON.stringify(result)}`, id)
         res.json(result || { code: 0 })
       } catch (error) {
         Bot.makeLog("error", `处理飞书 webhook 失败: ${error.message}`, id)
