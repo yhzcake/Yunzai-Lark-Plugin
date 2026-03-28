@@ -926,31 +926,47 @@ const adapter = new class LarkAdapter {
       data.friend_id = data.user_id
     }
 
+    // 处理回复消息 - 使用飞书的 parent_id 字段
+    if (message.parent_id) {
+      Bot.makeLog("debug", `检测到回复消息，parent_id: ${message.parent_id}`, id)
+      try {
+        // 获取源消息内容
+        const parentMsg = await Bot[id].im.message.get({
+          path: {
+            message_id: message.parent_id,
+          }
+        })
+        
+        Bot.makeLog("debug", `源消息数据：${JSON.stringify(parentMsg)}`, id)
+        
+        // 构造 reply 对象
+        data.reply = {
+          message_id: message.parent_id,
+          message: [],
+          raw_message: "",
+        }
+        
+        // 解析源消息内容
+        if (parentMsg && parentMsg.data && parentMsg.data.content) {
+          const parentContent = JSON.parse(parentMsg.data.content)
+          if (parentContent.text) {
+            data.reply.message.push({ type: "text", text: parentContent.text })
+            data.reply.raw_message = parentContent.text
+          }
+        }
+        
+        Bot.makeLog("debug", `reply 对象：${JSON.stringify(data.reply)}`, id)
+      } catch (error) {
+        Bot.makeLog("error", `获取源消息失败：${error.message}`, id)
+      }
+    }
+
     // 解析消息内容
     const content = JSON.parse(message.content)
     
-    // 处理回复消息格式：[回复：消息 ID] 消息内容
-    // 支持两种格式：[回复：123]text 或 [回复：[lark_xxx]]text
     if (content.text) {
-      const replyMatch = content.text.match(/^\[回复：(\[?[^\]]+\]?)\](.*)$/s)
-      if (replyMatch) {
-        // 这是回复消息
-        let replyMessageId = replyMatch[1]
-        const actualText = replyMatch[2].trim()
-        
-        // 如果回复 ID 带方括号，去掉方括号
-        if (replyMessageId.startsWith('[') && replyMessageId.endsWith(']')) {
-          replyMessageId = replyMessageId.slice(1, -1)
-        }
-        
-        data.message.push({ type: "reply", id: replyMessageId })
-        data.message.push({ type: "text", text: actualText })
-        data.raw_message += `[回复：${replyMessageId}]${actualText}`
-      } else {
-        // 普通文本消息
-        data.message.push({ type: "text", text: content.text })
-        data.raw_message += content.text
-      }
+      data.message.push({ type: "text", text: content.text })
+      data.raw_message += content.text
     }
 
     Bot.makeLog("info", `飞书${data.message_type === "group" ? "群" : "私聊"}消息：[${data.user_id}] ${data.raw_message}`, id)
