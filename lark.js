@@ -873,15 +873,7 @@ const adapter = new class LarkAdapter {
     Bot[id].eventDispatcher = eventDispatcher
 
     Bot.makeLog("mark", `${this.name}(${this.id}) ${this.version} 已连接`, id)
-    
-    // 触发 connect 事件，提供完整的 bot 信息给 ws-plugin
-    Bot.em(`connect.${id}`, {
-      self_id: id,
-      adapter: "Lark",
-      platform: "lark",
-      bot: Bot[id],
-    })
-    
+    Bot.em(`connect.${id}`, { self_id: id })
     return true
   }
 
@@ -929,10 +921,6 @@ const adapter = new class LarkAdapter {
       data.group_id = undefined
       data.friend_id = data.user_id
     }
-    
-    // 添加 ws-plugin 可能需要的字段
-    data.original_sender = sender
-    data.event = eventData
 
     // 解析消息内容
     const content = JSON.parse(message.content)
@@ -1042,12 +1030,6 @@ const adapter = new class LarkAdapter {
       eventData.friend_id = eventData.user_id
     }
     
-    // 添加 ws-plugin 可能需要的字段
-    eventData.original_sender = {
-      open_id: openId,
-      user_id: userId,
-    }
-
     // 使用自定义的序列化函数来避免循环引用
     const safeStringify = (obj) => {
       const seen = new WeakSet()
