@@ -852,6 +852,13 @@ const adapter = new class LarkAdapter {
     Object.defineProperty(Bot[id], "gl", { get() { return this.getGroupMap() }})
     Object.defineProperty(Bot[id], "gml", { get() { return this.getGroupMemberMap() }})
 
+    // 设置 adapter 信息供 ws-plugin 使用
+    Bot[id].adapter = {
+      id: "Lark",
+      platform: "lark",
+      name: "Lark"
+    }
+
     // 创建事件分发器处理消息事件
     const eventDispatcher = new lark.EventDispatcher({
       verificationToken: config.verification_token,
@@ -967,13 +974,17 @@ const adapter = new class LarkAdapter {
     if (content.text) {
       data.message.push({ type: "text", text: content.text })
       data.raw_message += content.text
+      // 添加 msg 字段，这是 Yunzai 识别命令的关键
+      data.msg = content.text
     }
 
     Bot.makeLog("info", `飞书${data.message_type === "group" ? "群" : "私聊"}消息：[${data.user_id}] ${data.raw_message}`, id)
+    Bot.makeLog("debug", `构造的数据：msg=${data.msg}, message_type=${data.message_type}`, id)
     
     // 触发特定类型的消息事件
     // Yunzai 的 Bot.em() 方法会自动向上触发事件（message.private -> message）
-    Bot.em(`message.${data.message_type}`, data)
+    const result = Bot.em(`message.${data.message_type}`, data)
+    Bot.makeLog("debug", `事件触发结果：${result}`, id)
   }
 
   async handleCardAction(id, data) {

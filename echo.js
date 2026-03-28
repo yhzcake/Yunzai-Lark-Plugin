@@ -21,12 +21,13 @@ export class EchoPlugin extends plugin {
       event: "message",
       rule: [
         {
-          reg: "^echo\\s*(.*)$",
+          // Yunzai 会自动将 / 转换为 #，所以只需要匹配 #
+          reg: "^#echo\\s*(.*)$",
           fnc: "echo",
           permission: "everyone",
         },
         {
-          reg: "^(retry|重复触发)$",
+          reg: "^#(retry|重复触发)$",
           fnc: "retry",
           permission: "everyone",
         }
