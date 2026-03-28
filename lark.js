@@ -891,17 +891,36 @@ const adapter = new class LarkAdapter {
     
     Bot.makeLog("debug", `使用 ${userIdType}: ${userId}`, id)
 
+    // 同步获取用户信息（等待完成后再处理消息）
+    let userInfo = null
+    try {
+      userInfo = await this.getUserInfo(id, userId, userIdType)
+      if (userInfo) {
+        Bot.makeLog("debug", `获取用户信息成功：${userInfo.name}`, id)
+      }
+    } catch (err) {
+      Bot.makeLog("warn", `获取用户信息失败：${err.message}`, id)
+    }
+
+    // 构造 sender 对象，优先使用 API 获取的真实信息
+    const senderData = {
+      user_id: `lark_${userId}`,
+      nickname: userInfo?.nickname || userInfo?.name || sender.sender_id.user_id || userId || 'unknown',
+      sex: userInfo?.gender === 1 ? 'male' : (userInfo?.gender === 2 ? 'female' : 'unknown'),
+      age: 0,
+      card: userInfo?.name || sender.sender_id.user_id || userId || 'unknown',
+      title: userInfo?.job_title || '',
+      level: '',
+      role: 'member',
+    }
+
     const data = {
       self_id: id,
-      bot: Bot[id],
       post_type: "message",
       message_id: message.message_id,
       id: userId,
       user_id: `lark_${userId}`,
-      sender: {
-        user_id: `lark_${userId}`,
-        nickname: sender.sender_id.user_id || userId,
-      },
+      sender: senderData,
       raw_message: "",
       message: [],
       // 添加 adapter 和 platform 字段供 ws-plugin 识别
@@ -914,7 +933,19 @@ const adapter = new class LarkAdapter {
       data.message_type = "group"
       data.sub_type = "normal"
       data.group_id = `lark_${message.chat_id}`
-      data.group_name = eventData.chat?.name || data.group_id
+      // 优先使用 webhook 中的 chat name，如果没有则异步获取
+      if (eventData.chat?.name) {
+        data.group_name = eventData.chat.name
+      } else {
+        // 异步获取群名称，不阻塞消息处理
+        this.getChatName(id, message.chat_id).then(name => {
+          data.group_name = name
+          Bot.makeLog("debug", `异步获取群名称成功：${name}`, id)
+        }).catch(err => {
+          Bot.makeLog("warn", `异步获取群名称失败：${err.message}`, id)
+        })
+        data.group_name = `飞书群聊 (${message.chat_id})`
+      }
     } else {
       data.message_type = "private"
       data.sub_type = "friend"
@@ -925,52 +956,9 @@ const adapter = new class LarkAdapter {
     // 处理回复消息 - 使用飞书的 parent_id 字段
     if (message.parent_id) {
       Bot.makeLog("debug", `检测到回复消息，parent_id: ${message.parent_id}`, id)
-      try {
-        // 获取源消息内容
-        const parentMsgRet = await Bot[id].im.message.get({
-          path: {
-            message_id: message.parent_id,
-          }
-        })
-        
-        Bot.makeLog("debug", `源消息返回数据：${JSON.stringify(parentMsgRet)}`, id)
-        
-        // 从返回数据中提取消息内容
-        const parentMsg = parentMsgRet.data || parentMsgRet
-        if (parentMsg && parentMsg.content) {
-          const parentContent = JSON.parse(parentMsg.content)
-          const parentSenderId = parentMsg.sender?.sender_id?.open_id || parentMsg.sender?.sender_id?.user_id
-          
-          // 构造 reply 对象，使用 Object.defineProperty 避免属性冲突
-          Object.defineProperty(data, 'reply', {
-            value: {
-              message_id: message.parent_id,
-              user_id: `lark_${parentSenderId || 'unknown'}`,
-              sender: {
-                user_id: `lark_${parentSenderId || 'unknown'}`,
-                nickname: parentMsg.sender?.sender_id?.user_id || 'unknown',
-              },
-              message: [],
-              raw_message: parentContent.text || "",
-            },
-            writable: true,
-            enumerable: true,
-            configurable: true
-          })
-          
-          // 解析源消息内容到 message 数组
-          if (parentContent.text) {
-            data.reply.message.push({ type: "text", text: parentContent.text })
-          }
-          
-          Bot.makeLog("debug", `reply 对象构造完成：${JSON.stringify(data.reply)}`, id)
-        } else {
-          Bot.makeLog("warn", `源消息数据格式异常`, id)
-        }
-      } catch (error) {
-        Bot.makeLog("error", `获取源消息失败：${error.message}`, id)
-        Bot.makeLog("error", `错误堆栈：${error.stack}`, id)
-      }
+      // 在 message 数组开头添加 reply 元素，这是 Yunzai 标准格式
+      data.message.push({ type: "reply", id: message.parent_id })
+      data.raw_message += `[回复:${message.parent_id}]`
     }
 
     // 解析消息内容
@@ -984,10 +972,8 @@ const adapter = new class LarkAdapter {
     Bot.makeLog("info", `飞书${data.message_type === "group" ? "群" : "私聊"}消息：[${data.user_id}] ${data.raw_message}`, id)
     
     // 触发特定类型的消息事件
+    // Yunzai 的 Bot.em() 方法会自动向上触发事件（message.private -> message）
     Bot.em(`message.${data.message_type}`, data)
-    
-    // 触发通用 message 事件，供 ws-plugin 使用
-    Bot.em("message", data)
   }
 
   async handleCardAction(id, data) {
@@ -1046,13 +1032,18 @@ const adapter = new class LarkAdapter {
     // 构造消息数据，模拟用户发送指令
     const eventData = {
       self_id: id,
-      bot: Bot[id],
       post_type: "message",
       id: sendId,
       user_id: `lark_${sendId}`,
       sender: {
         user_id: `lark_${sendId}`,
-        nickname: sendId,
+        nickname: sendId || 'unknown',
+        sex: 'unknown',
+        age: 0,
+        card: sendId || 'unknown',
+        title: '',
+        level: '',
+        role: 'member',
       },
       message_type: chatType === "p2p" ? "private" : "group",
       sub_type: chatType === "p2p" ? "friend" : "normal",
@@ -1061,16 +1052,12 @@ const adapter = new class LarkAdapter {
       // 添加 adapter 和 platform 字段供 ws-plugin 识别
       adapter: "Lark",
       platform: "lark",
-      // 添加 reply 方法
-      reply: async (msg) => {
-        return await this.sendMsg(eventData, msg)
-      },
     }
 
     // 如果是群聊，设置群 ID
     if (eventData.message_type === "group") {
       eventData.group_id = `lark_${chatId}`
-      eventData.group_name = ""
+      eventData.group_name = `飞书群聊 (${chatId})`
     } else {
       eventData.friend_id = eventData.user_id
     }
@@ -1092,10 +1079,8 @@ const adapter = new class LarkAdapter {
     Bot.makeLog("info", `触发消息事件：${safeStringify(eventData)}`, id)
 
     // 触发特定类型的消息事件
+    // Yunzai 的 Bot.em() 方法会自动向上触发事件（message.private -> message）
     Bot.em(`message.${eventData.message_type}`, eventData)
-    
-    // 触发通用 message 事件，供 ws-plugin 使用
-    Bot.em("message", eventData)
 
     // 返回成功响应给飞书
     return {
@@ -1106,6 +1091,69 @@ const adapter = new class LarkAdapter {
           content: "指令已执行"
         }
       }
+    }
+  }
+
+  // 异步获取群名称
+  async getChatName(id, chatId) {
+    try {
+      if (!Bot[id] || !Bot[id].im) {
+        Bot.makeLog("warn", `Bot ${id} 未连接，无法获取群信息`, id)
+        return `飞书群聊 (${chatId})`
+      }
+      
+      const chatRet = await Bot[id].im.chat.get({
+        path: { chat_id: chatId }
+      })
+      
+      Bot.makeLog("debug", `获取群信息返回：${JSON.stringify(chatRet)}`, id)
+      
+      const chatData = chatRet.data || chatRet
+      if (chatData && chatData.name) {
+        return chatData.name
+      }
+      
+      return `飞书群聊 (${chatId})`
+    } catch (error) {
+      Bot.makeLog("error", `获取群信息失败：${error.message}`, id)
+      return `飞书群聊 (${chatId})`
+    }
+  }
+
+  // 异步获取用户信息
+  async getUserInfo(id, userId, userIdType = 'open_id') {
+    try {
+      if (!Bot[id] || !Bot[id].contact) {
+        Bot.makeLog("warn", `Bot ${id} 未连接，无法获取用户信息`, id)
+        return null
+      }
+      
+      const userRet = await Bot[id].contact.user.get({
+        params: { user_id_type: userIdType },
+        path: { user_id: userId }
+      })
+      
+      Bot.makeLog("debug", `获取用户信息返回：${JSON.stringify(userRet)}`, id)
+      
+      const userData = userRet.data?.user || userRet.data || userRet
+      if (userData && userData.name) {
+        return {
+          name: userData.name,
+          nickname: userData.nickname || userData.name,
+          avatar: userData.avatar?.avatar_720 || userData.avatar?.avatar_640 || userData.avatar?.avatar_240 || '',
+          gender: userData.gender || 0, // 0: 未知，1: 男，2: 女
+          email: userData.email || '',
+          mobile: userData.mobile || '',
+          employee_no: userData.employee_no || '',
+          job_title: userData.job_title || '',
+          department_ids: userData.department_ids || [],
+        }
+      }
+      
+      return null
+    } catch (error) {
+      Bot.makeLog("warn", `获取用户信息失败：${error.message}`, id)
+      return null
     }
   }
 

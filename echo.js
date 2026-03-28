@@ -45,26 +45,32 @@ export class EchoPlugin extends plugin {
     let text = this.e.msg.trim()
     
     // 如果没有提供文本，检查是否有回复消息
-    if (!text && this.e.reply) {
-      const replyMsg = this.e.reply
-      Bot.makeLog("debug", `回复消息内容：${JSON.stringify(replyMsg)}`, this.e.self_id)
+    // 注意：this.e.reply 是方法，不是对象！应该检查 this.e.reply_id
+    if (!text && this.e.reply_id) {
+      Bot.makeLog("debug", `检测到回复消息，reply_id: ${this.e.reply_id}`, this.e.self_id)
       
-      // 尝试从不同位置获取回复消息的内容
-      if (replyMsg.message) {
-        if (Array.isArray(replyMsg.message)) {
-          text = replyMsg.message
-            .filter(m => m.type === "text")
-            .map(m => m.text)
-            .join(" ")
-            .trim()
-        } else if (typeof replyMsg.message === "string") {
-          text = replyMsg.message.trim()
+      // 尝试获取回复消息
+      const replyMsg = await this.e.getReply?.()
+      if (replyMsg) {
+        Bot.makeLog("debug", `回复消息内容：${JSON.stringify(replyMsg)}`, this.e.self_id)
+        
+        // 从回复消息中提取文本
+        if (replyMsg.message) {
+          if (Array.isArray(replyMsg.message)) {
+            text = replyMsg.message
+              .filter(m => m.type === "text")
+              .map(m => m.text)
+              .join(" ")
+              .trim()
+          }
         }
-      }
-      
-      // 尝试从 raw_message 获取
-      if (!text && replyMsg.raw_message) {
-        text = replyMsg.raw_message.trim()
+        
+        // 尝试从 raw_message 获取
+        if (!text && replyMsg.raw_message) {
+          text = replyMsg.raw_message.trim()
+        }
+      } else {
+        Bot.makeLog("warn", `无法获取回复消息内容`, this.e.self_id)
       }
     }
     
@@ -84,12 +90,18 @@ export class EchoPlugin extends plugin {
    */
   async retry() {
     // 检查是否有回复消息
-    if (!this.e.reply) {
+    if (!this.e.reply_id) {
       await this.reply("请回复一条包含指令的消息后再使用 #retry", true)
       return
     }
 
-    const replyMsg = this.e.reply
+    // 获取回复消息
+    const replyMsg = await this.e.getReply?.()
+    if (!replyMsg) {
+      await this.reply("无法获取回复消息内容", true)
+      return
+    }
+    
     Bot.makeLog("debug", `回复消息内容：${JSON.stringify(replyMsg)}`, this.e.self_id)
 
     // 获取回复消息的原始内容
@@ -121,8 +133,9 @@ export class EchoPlugin extends plugin {
 
     Bot.makeLog("info", `Retry 原始消息：${originalMsg}`, this.e.self_id)
 
-    // 检查原始消息是否以指令前缀开头（#）
-    if (!originalMsg.startsWith("#")) {
+    // 检查原始消息是否以指令前缀开头（支持多种前缀）
+    const cmdPrefixes = ["#", "/", "!", "."]
+    if (!cmdPrefixes.some(prefix => originalMsg.startsWith(prefix))) {
       await this.reply("回复的消息不是指令，无法重试", true)
       return
     }
@@ -139,8 +152,8 @@ export class EchoPlugin extends plugin {
     // 触发新的事件，让 Yunzai 重新处理指令
     Bot.makeLog("info", `触发重试指令：${originalMsg}`, this.e.self_id)
     
-    // 使用 emit 触发 message 事件
-    Bot.em("message", newEvent)
+    // 触发 message 事件（Yunzai 会自动向上触发）
+    Bot.em(`message.${this.e.message_type}`, newEvent)
   }
 }
 
