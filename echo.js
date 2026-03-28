@@ -109,6 +109,8 @@ export class EchoPlugin extends plugin {
     }
     
     Bot.makeLog("debug", `回复消息内容：${JSON.stringify(replyMsg)}`, this.e.self_id)
+    Bot.makeLog("debug", `回复消息 raw_message: ${replyMsg.raw_message}`, this.e.self_id)
+    Bot.makeLog("debug", `回复消息 message: ${JSON.stringify(replyMsg.message)}`, this.e.self_id)
 
     // 获取回复消息的原始内容
     let originalMsg = ""
@@ -116,10 +118,12 @@ export class EchoPlugin extends plugin {
     // 优先从 raw_message 获取（这是完整的文本内容）
     if (replyMsg.raw_message) {
       originalMsg = replyMsg.raw_message.trim()
+      Bot.makeLog("debug", `从 raw_message 获取：${originalMsg}`, this.e.self_id)
     }
     
     // 如果 raw_message 为空，尝试从 message 数组提取
     if (!originalMsg && replyMsg.message) {
+      Bot.makeLog("debug", `raw_message 为空，从 message 数组提取`, this.e.self_id)
       // 如果是数组，拼接所有文本内容
       if (Array.isArray(replyMsg.message)) {
         originalMsg = replyMsg.message
@@ -127,8 +131,10 @@ export class EchoPlugin extends plugin {
           .map(m => m.text)
           .join(" ")
           .trim()
+        Bot.makeLog("debug", `从 message 数组提取：${originalMsg}`, this.e.self_id)
       } else if (typeof replyMsg.message === "string") {
         originalMsg = replyMsg.message.trim()
+        Bot.makeLog("debug", `从 message 字符串提取：${originalMsg}`, this.e.self_id)
       }
     }
 

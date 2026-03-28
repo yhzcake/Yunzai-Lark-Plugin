@@ -958,18 +958,26 @@ const adapter = new class LarkAdapter {
         })
         data.group_name = `飞书群聊 (${message.chat_id})`
       }
-      // 添加 group 对象供 Yunzai 设置 getReply 使用
+      // 添加 group 对象供 Yunzai 设置 getReply 和 reply 使用
+      // 使用闭包保存当前消息的 chat_id 和 self_id
+      const groupData = { group_id: `lark_${message.chat_id}`, self_id: id, bot: Bot[id] }
       data.group = {
-        getMsg: (message_id) => this.getMsg(Bot[id], message_id),
+        ...groupData,
+        getMsg: (message_id) => this.getMsg(groupData, message_id),
+        sendMsg: (msg) => this.sendMsg(groupData, msg),
       }
     } else {
       data.message_type = "private"
       data.sub_type = "friend"
       data.group_id = undefined
       data.friend_id = data.user_id
-      // 添加 friend 对象供 Yunzai 设置 getReply 使用
+      // 添加 friend 对象供 Yunzai 设置 getReply 和 reply 使用
+      // 使用闭包保存当前消息的 user_id
+      const friendData = { user_id: data.user_id, self_id: id, bot: Bot[id] }
       data.friend = {
-        getMsg: (message_id) => this.getFriendMsg(Bot[id], message_id),
+        ...friendData,
+        getMsg: (message_id) => this.getFriendMsg(friendData, message_id),
+        sendMsg: (msg) => this.sendFriendMsg(friendData, msg),
       }
     }
 
