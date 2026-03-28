@@ -21,12 +21,12 @@ export class EchoPlugin extends plugin {
       event: "message",
       rule: [
         {
-          reg: "^#echo\\s+(.+)$",
+          reg: "^echo\\s*(.*)$",
           fnc: "echo",
           permission: "everyone",
         },
         {
-          reg: "^#(retry|重复触发)$",
+          reg: "^(retry|重复触发)$",
           fnc: "retry",
           permission: "everyone",
         }
@@ -36,12 +36,13 @@ export class EchoPlugin extends plugin {
 
   /**
    * Echo 功能：将用户输入的文本原样返回
-   * 使用方式：#echo 你好世界
+   * 使用方式：echo 你好世界
    * 回复：你好世界
-   * 或者回复某条消息发送 #echo，重复该消息
+   * 或者回复某条消息发送 echo，重复该消息
    */
   async echo() {
-    let text = this.e.msg.replace(/^#echo\s*/, "").trim()
+    // this.e.msg 已经是去掉指令头的消息内容
+    let text = this.e.msg.trim()
     
     // 如果没有提供文本，检查是否有回复消息
     if (!text && this.e.reply) {
@@ -68,7 +69,7 @@ export class EchoPlugin extends plugin {
     }
     
     if (!text) {
-      await this.reply("请提供要回显的文本内容，或回复一条消息后使用 #echo", true)
+      await this.reply("请提供要回显的文本内容，或回复一条消息后使用 echo", true)
       return
     }
     

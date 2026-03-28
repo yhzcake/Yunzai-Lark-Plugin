@@ -907,6 +907,10 @@ const adapter = new class LarkAdapter {
       // 添加 adapter 和 platform 字段供 ws-plugin 识别
       adapter: "Lark",
       platform: "lark",
+      // 添加 reply 方法
+      reply: async (msg) => {
+        return await this.sendMsg(data, msg)
+      },
     }
 
     // 判断是私聊还是群聊
@@ -953,6 +957,9 @@ const adapter = new class LarkAdapter {
     
     // 触发特定类型的消息事件
     Bot.em(`message.${data.message_type}`, data)
+    
+    // 触发通用 message 事件，供 ws-plugin 使用
+    Bot.em("message", data)
   }
 
   async handleCardAction(id, data) {
@@ -1026,6 +1033,10 @@ const adapter = new class LarkAdapter {
       // 添加 adapter 和 platform 字段供 ws-plugin 识别
       adapter: "Lark",
       platform: "lark",
+      // 添加 reply 方法
+      reply: async (msg) => {
+        return await this.sendMsg(eventData, msg)
+      },
     }
 
     // 如果是群聊，设置群 ID
@@ -1054,6 +1065,9 @@ const adapter = new class LarkAdapter {
 
     // 触发特定类型的消息事件
     Bot.em(`message.${eventData.message_type}`, eventData)
+    
+    // 触发通用 message 事件，供 ws-plugin 使用
+    Bot.em("message", eventData)
 
     // 返回成功响应给飞书
     return {
