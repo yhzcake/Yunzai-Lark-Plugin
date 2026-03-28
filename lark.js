@@ -718,59 +718,93 @@ const adapter = new class LarkAdapter {
 
   makeMessageArray(data) {
     const messageData = data.data || data
-    messageData.user_id = `lark_${messageData.sender?.id || messageData.sender_id}`
-    messageData.sender = {
-      user_id: messageData.user_id,
-      nickname: messageData.sender?.name || messageData.sender?.name,
-      avatar: messageData.sender?.avatar_url || messageData.sender?.avatar_url,
+    
+    // 飞书 API v1 返回的数据结构：data.items[0].body.content
+    // 如果是这种格式，需要提取出来
+    let contentData = messageData
+    if (messageData.items && Array.isArray(messageData.items) && messageData.items.length > 0) {
+      const item = messageData.items[0]
+      if (item.body && item.body.content) {
+        // 解析嵌套的 content JSON 字符串
+        try {
+          contentData = {
+            ...messageData,
+            content: typeof item.body.content === 'string' ? JSON.parse(item.body.content) : item.body.content,
+            message_id: item.message_id || messageData.message_id,
+            sender: item.sender || messageData.sender,
+          }
+        } catch (e) {
+          Bot.makeLog("warn", `解析飞书消息 content 失败：${e.message}`, messageData.self_id)
+        }
+      }
     }
-    messageData.message_id = messageData.message_id || messageData.msg_id
+    
+    contentData.user_id = `lark_${contentData.sender?.id || contentData.sender_id}`
+    contentData.sender = {
+      user_id: contentData.user_id,
+      nickname: contentData.sender?.name || contentData.sender?.name,
+      avatar: contentData.sender?.avatar_url || contentData.sender?.avatar_url,
+    }
+    contentData.message_id = contentData.message_id || contentData.msg_id
 
-    messageData.message = []
-    messageData.raw_message = ""
+    contentData.message = []
+    contentData.raw_message = ""
 
-    const content = typeof messageData.content === 'string' ? JSON.parse(messageData.content) : messageData.content
+    const content = typeof contentData.content === 'string' ? JSON.parse(contentData.content) : contentData.content
 
     if (content?.text) {
-      messageData.message.push({ type: "text", text: content.text })
-      messageData.raw_message += content.text
+      contentData.message.push({ type: "text", text: content.text })
+      contentData.raw_message += content.text
     }
 
     if (content?.mentions) {
       for (const mention of content.mentions) {
-        messageData.message.push({ 
+        contentData.message.push({ 
           type: "at", 
           qq: `lark_${mention.id}` 
         })
-        messageData.raw_message += `[提及：lark_${mention.id}]`
+        contentData.raw_message += `[提及：lark_${mention.id}]`
       }
     }
 
     if (content?.image_key) {
-      messageData.message.push({
+      contentData.message.push({
         type: "image",
         file: content.image_key,
       })
-      messageData.raw_message += `[图片：${content.image_key}]`
+      contentData.raw_message += `[图片：${content.image_key}]`
     }
 
     if (content?.video_key) {
-      messageData.message.push({
+      contentData.message.push({
         type: "video",
         file: content.video_key,
       })
-      messageData.raw_message += `[视频：${content.video_key}]`
+      contentData.raw_message += `[视频：${content.video_key}]`
     }
 
     if (content?.file_key) {
-      messageData.message.push({
+      contentData.message.push({
         type: "file",
         file: content.file_key,
       })
-      messageData.raw_message += `[文件：${content.file_key}]`
+      contentData.raw_message += `[文件：${content.file_key}]`
     }
 
-    return messageData
+    // 添加 Yunzai 标准字段，确保其他插件能正确使用
+    contentData.post_type = "message"
+    contentData.message_type = contentData.chat_type === "group" ? "group" : "private"
+    contentData.sub_type = contentData.chat_type === "group" ? "normal" : "friend"
+    contentData.self_id = contentData.self_id || `lark_${contentData.app_id}`
+    
+    if (contentData.chat_type === "group") {
+      contentData.group_id = `lark_${contentData.chat_id}`
+      contentData.group_name = contentData.chat_name || contentData.group_id
+    } else {
+      contentData.friend_id = contentData.user_id
+    }
+
+    return contentData
   }
 
   makeMessage(data) {
