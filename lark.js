@@ -521,9 +521,17 @@ const adapter = new class LarkAdapter {
     }
     
     // 普通消息使用 message.create
+    // 根据 receive_id 的类型设置 receive_id_type
+    let receiveIdType = data.message_type === 'private' ? 'user_id' : 'chat_id'
+    if (data.message_type === 'private' && data.id && data.id.startsWith('ou_')) {
+      receiveIdType = 'open_id'
+    }
+    
+    Bot.makeLog("debug", `发送消息，receive_id: ${data.id}, receive_id_type: ${receiveIdType}`, data.self_id)
+    
     const ret = await data.bot.im.message.create({
       params: {
-        receive_id_type: data.message_type === 'private' ? 'user_id' : 'chat_id',
+        receive_id_type: receiveIdType,
       },
       data: messageData
     })
@@ -532,8 +540,11 @@ const adapter = new class LarkAdapter {
   }
 
   async sendFriendMsg(data, msg) {
-    // 直接使用 user_id，不需要调用 getFriendInfo（避免权限问题）
-    data.id = data.user_id.replace(/^lark_/, "")
+    // 直接使用 user_id/open_id，不需要调用 getFriendInfo（避免权限问题）
+    // open_id 格式如 ou_xxxxx，保留前缀；user_id 格式如 2b2e294f，需要移除 lark_ 前缀
+    const rawId = data.user_id.replace(/^lark_/, "")
+    // 如果是 open_id（以 ou_ 开头），保留完整 ID；否则移除 lark_ 前缀
+    data.id = rawId.startsWith('ou_') ? rawId : rawId
     data.message_type = 'private'
     return this.sendMsg(data, msg)
   }
@@ -548,8 +559,9 @@ const adapter = new class LarkAdapter {
   }
 
   async getFriendMsg(data, message_id) {
-    // 直接使用 user_id，不需要调用 getFriendInfo（避免权限问题）
-    data.id = data.user_id.replace(/^lark_/, "")
+    // 直接使用 user_id/open_id，不需要调用 getFriendInfo（避免权限问题）
+    const rawId = data.user_id.replace(/^lark_/, "")
+    data.id = rawId.startsWith('ou_') ? rawId : rawId
     return this.getMsg(data, message_id)
   }
 
@@ -563,15 +575,18 @@ const adapter = new class LarkAdapter {
   }
 
   async recallFriendMsg(data, message_id) {
-    // 直接使用 user_id，不需要调用 getFriendInfo（避免权限问题）
-    data.id = data.user_id.replace(/^lark_/, "")
+    // 直接使用 user_id/open_id，不需要调用 getFriendInfo（避免权限问题）
+    const rawId = data.user_id.replace(/^lark_/, "")
+    data.id = rawId.startsWith('ou_') ? rawId : rawId
     return this.recallMsg(data, message_id)
   }
 
   async getFriendInfo(data) {
+    const rawId = data.user_id.replace(/^lark_/, "")
+    const userId = rawId.startsWith('ou_') ? rawId : rawId
     const ret = await data.bot.contact.user.get({
       path: {
-        user_id: data.user_id.replace(/^lark_/, "")
+        user_id: userId
       }
     })
     return {
@@ -870,16 +885,22 @@ const adapter = new class LarkAdapter {
       return
     }
 
+    // 优先使用 open_id，如果没有则使用 user_id
+    const userId = sender.sender_id.open_id || sender.sender_id.user_id
+    const userIdType = sender.sender_id.open_id ? 'open_id' : 'user_id'
+    
+    Bot.makeLog("debug", `使用 ${userIdType}: ${userId}`, id)
+
     const data = {
       self_id: id,
       bot: Bot[id],
       post_type: "message",
       message_id: message.message_id,
-      id: sender.sender_id.user_id,
-      user_id: `lark_${sender.sender_id.user_id}`,
+      id: userId,
+      user_id: `lark_${userId}`,
       sender: {
-        user_id: `lark_${sender.sender_id.user_id}`,
-        nickname: sender.sender_id.user_id,
+        user_id: `lark_${userId}`,
+        nickname: sender.sender_id.user_id || userId,
       },
       raw_message: "",
       message: [],
@@ -968,16 +989,20 @@ const adapter = new class LarkAdapter {
       return { code: -1, msg: "Missing user info" }
     }
 
+    // 优先使用 open_id 发送消息（open_id 格式如 ou_xxxxx，不需要移除前缀）
+    const sendId = openId || userId
+    Bot.makeLog("debug", `使用 ID 发送消息：${sendId}`, id)
+
     // 构造消息数据，模拟用户发送指令
     const eventData = {
       self_id: id,
       bot: Bot[id],
       post_type: "message",
-      id: (userId || openId).replace(/^lark_/, ""),
-      user_id: `lark_${userId || openId}`,
+      id: sendId,
+      user_id: `lark_${sendId}`,
       sender: {
-        user_id: `lark_${userId || openId}`,
-        nickname: userId || openId,
+        user_id: `lark_${sendId}`,
+        nickname: sendId,
       },
       message_type: chatType === "p2p" ? "private" : "group",
       message: [{ type: "text", text: callback }],
