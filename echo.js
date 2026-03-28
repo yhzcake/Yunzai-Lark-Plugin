@@ -1,9 +1,16 @@
 logger.info(logger.yellow("- 正在加载 Echo 插件"))
 
+import plugin from "../../lib/plugins/plugin.js"
 import makeConfig from "../../lib/plugins/config.js"
 
 const { config, configSave } = await makeConfig("Echo", {
   permission: "master",
+}, {
+  tips: [
+    "欢迎使用 Echo 插件!",
+    "#echo <文本> - 回显文本",
+    "#retry - 重试回复的指令",
+  ],
 })
 
 export class EchoPlugin extends plugin {
@@ -31,12 +38,37 @@ export class EchoPlugin extends plugin {
    * Echo 功能：将用户输入的文本原样返回
    * 使用方式：#echo 你好世界
    * 回复：你好世界
+   * 或者回复某条消息发送 #echo，重复该消息
    */
   async echo() {
-    const text = this.e.msg.replace(/^#echo\s+/, "").trim()
+    let text = this.e.msg.replace(/^#echo\s*/, "").trim()
+    
+    // 如果没有提供文本，检查是否有回复消息
+    if (!text && this.e.reply) {
+      const replyMsg = this.e.reply
+      Bot.makeLog("debug", `回复消息内容：${JSON.stringify(replyMsg)}`, this.e.self_id)
+      
+      // 尝试从不同位置获取回复消息的内容
+      if (replyMsg.message) {
+        if (Array.isArray(replyMsg.message)) {
+          text = replyMsg.message
+            .filter(m => m.type === "text")
+            .map(m => m.text)
+            .join(" ")
+            .trim()
+        } else if (typeof replyMsg.message === "string") {
+          text = replyMsg.message.trim()
+        }
+      }
+      
+      // 尝试从 raw_message 获取
+      if (!text && replyMsg.raw_message) {
+        text = replyMsg.raw_message.trim()
+      }
+    }
     
     if (!text) {
-      await this.reply("请提供要回显的文本内容", true)
+      await this.reply("请提供要回显的文本内容，或回复一条消息后使用 #echo", true)
       return
     }
     
@@ -101,13 +133,6 @@ export class EchoPlugin extends plugin {
       ...this.e,
       msg: originalMsg,
       raw_message: originalMsg,
-      message: replyMsg.message,
-      userId: this.e.userId,
-      user_id: this.e.user_id,
-      groupId: this.e.groupId,
-      group_id: this.e.group_id,
-      friendId: this.e.friendId,
-      friend_id: this.e.friend_id,
     }
 
     // 触发新的事件，让 Yunzai 重新处理指令
@@ -117,7 +142,5 @@ export class EchoPlugin extends plugin {
     Bot.em("message", newEvent)
   }
 }
-
-const plugin = new EchoPlugin()
 
 logger.info(logger.green("- Echo 插件 加载完成"))

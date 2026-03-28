@@ -873,7 +873,15 @@ const adapter = new class LarkAdapter {
     Bot[id].eventDispatcher = eventDispatcher
 
     Bot.makeLog("mark", `${this.name}(${this.id}) ${this.version} 已连接`, id)
-    Bot.em(`connect.${id}`, { self_id: id })
+    
+    // 触发 connect 事件，提供完整的 bot 信息给 ws-plugin
+    Bot.em(`connect.${id}`, {
+      self_id: id,
+      adapter: "Lark",
+      platform: "lark",
+      bot: Bot[id],
+    })
+    
     return true
   }
 
@@ -904,16 +912,27 @@ const adapter = new class LarkAdapter {
       },
       raw_message: "",
       message: [],
+      // 添加 adapter 和 platform 字段供 ws-plugin 识别
+      adapter: "Lark",
+      platform: "lark",
     }
 
     // 判断是私聊还是群聊
     if (message.chat_type === "group") {
       data.message_type = "group"
+      data.sub_type = "normal"
       data.group_id = `lark_${message.chat_id}`
+      data.group_name = eventData.chat?.name || data.group_id
     } else {
       data.message_type = "private"
+      data.sub_type = "friend"
       data.group_id = undefined
+      data.friend_id = data.user_id
     }
+    
+    // 添加 ws-plugin 可能需要的字段
+    data.original_sender = sender
+    data.event = eventData
 
     // 解析消息内容
     const content = JSON.parse(message.content)
@@ -937,7 +956,15 @@ const adapter = new class LarkAdapter {
     }
 
     Bot.makeLog("info", `飞书${data.message_type === "group" ? "群" : "私聊"}消息：[${data.user_id}] ${data.raw_message}`, id)
+    
+    Bot.makeLog("debug", `触发事件：message.${data.message_type} 和 message`, id)
+    Bot.makeLog("debug", `事件数据：user_id=${data.user_id}, message_type=${data.message_type}, sub_type=${data.sub_type}, adapter=${data.bot?.adapter?.id}`, id)
+    
+    // 触发特定类型的消息事件
     Bot.em(`message.${data.message_type}`, data)
+    
+    // 触发通用 message 事件，供 ws-plugin 使用
+    Bot.em("message", data)
   }
 
   async handleCardAction(id, data) {
@@ -1005,14 +1032,26 @@ const adapter = new class LarkAdapter {
         nickname: sendId,
       },
       message_type: chatType === "p2p" ? "private" : "group",
+      sub_type: chatType === "p2p" ? "friend" : "normal",
       message: [{ type: "text", text: callback }],
       raw_message: callback,
+      // 添加 adapter 和 platform 字段供 ws-plugin 识别
+      adapter: "Lark",
+      platform: "lark",
     }
 
-    // 如果是群聊，设置群ID
+    // 如果是群聊，设置群 ID
     if (eventData.message_type === "group") {
       eventData.group_id = `lark_${chatId}`
       eventData.group_name = ""
+    } else {
+      eventData.friend_id = eventData.user_id
+    }
+    
+    // 添加 ws-plugin 可能需要的字段
+    eventData.original_sender = {
+      open_id: openId,
+      user_id: userId,
     }
 
     // 使用自定义的序列化函数来避免循环引用
@@ -1031,9 +1070,11 @@ const adapter = new class LarkAdapter {
 
     Bot.makeLog("info", `触发消息事件：${safeStringify(eventData)}`, id)
 
-    // 触发消息事件，让 Yunzai 处理指令
-    // 使用特定的事件类型（message.group 或 message.private）
+    // 触发特定类型的消息事件
     Bot.em(`message.${eventData.message_type}`, eventData)
+    
+    // 触发通用 message 事件，供 ws-plugin 使用
+    Bot.em("message", eventData)
 
     // 返回成功响应给飞书
     return {
