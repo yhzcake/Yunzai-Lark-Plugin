@@ -957,14 +957,8 @@ const adapter = new class LarkAdapter {
 
     Bot.makeLog("info", `飞书${data.message_type === "group" ? "群" : "私聊"}消息：[${data.user_id}] ${data.raw_message}`, id)
     
-    Bot.makeLog("debug", `触发事件：message.${data.message_type} 和 message`, id)
-    Bot.makeLog("debug", `事件数据：user_id=${data.user_id}, message_type=${data.message_type}, sub_type=${data.sub_type}, adapter=${data.bot?.adapter?.id}`, id)
-    
     // 触发特定类型的消息事件
     Bot.em(`message.${data.message_type}`, data)
-    
-    // 触发通用 message 事件，供 ws-plugin 使用
-    Bot.em("message", data)
   }
 
   async handleCardAction(id, data) {
@@ -1072,9 +1066,6 @@ const adapter = new class LarkAdapter {
 
     // 触发特定类型的消息事件
     Bot.em(`message.${eventData.message_type}`, eventData)
-    
-    // 触发通用 message 事件，供 ws-plugin 使用
-    Bot.em("message", eventData)
 
     // 返回成功响应给飞书
     return {
