@@ -753,8 +753,11 @@ const adapter = new class LarkAdapter {
     const content = typeof contentData.content === 'string' ? JSON.parse(contentData.content) : contentData.content
 
     if (content?.text) {
-      contentData.message.push({ type: "text", text: content.text })
-      contentData.raw_message += content.text
+      // 过滤飞书 reply 方法自动添加的引用标记 [lark_ou_xxx]
+      let text = content.text
+      text = text.replace(/^\[lark_[a-zA-Z0-9_]+\]\s*/, "")
+      contentData.message.push({ type: "text", text: text })
+      contentData.raw_message += text
     }
 
     if (content?.mentions) {
