@@ -925,13 +925,19 @@ const adapter = new class LarkAdapter {
     // 解析消息内容
     const content = JSON.parse(message.content)
     
-    // 处理回复消息格式：[回复：消息ID]消息内容
+    // 处理回复消息格式：[回复：消息 ID] 消息内容
+    // 支持两种格式：[回复：123]text 或 [回复：[lark_xxx]]text
     if (content.text) {
-      const replyMatch = content.text.match(/^\[回复：([^\]]+)\](.*)$/s)
+      const replyMatch = content.text.match(/^\[回复：(\[?[^\]]+\]?)\](.*)$/s)
       if (replyMatch) {
         // 这是回复消息
-        const replyMessageId = replyMatch[1]
+        let replyMessageId = replyMatch[1]
         const actualText = replyMatch[2].trim()
+        
+        // 如果回复 ID 带方括号，去掉方括号
+        if (replyMessageId.startsWith('[') && replyMessageId.endsWith(']')) {
+          replyMessageId = replyMessageId.slice(1, -1)
+        }
         
         data.message.push({ type: "reply", id: replyMessageId })
         data.message.push({ type: "text", text: actualText })
