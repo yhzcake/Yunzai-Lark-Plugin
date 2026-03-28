@@ -931,33 +931,45 @@ const adapter = new class LarkAdapter {
       Bot.makeLog("debug", `检测到回复消息，parent_id: ${message.parent_id}`, id)
       try {
         // 获取源消息内容
-        const parentMsg = await Bot[id].im.message.get({
+        const parentMsgRet = await Bot[id].im.message.get({
           path: {
             message_id: message.parent_id,
           }
         })
         
-        Bot.makeLog("debug", `源消息数据：${JSON.stringify(parentMsg)}`, id)
+        Bot.makeLog("debug", `源消息返回数据：${JSON.stringify(parentMsgRet)}`, id)
         
-        // 构造 reply 对象
-        data.reply = {
-          message_id: message.parent_id,
-          message: [],
-          raw_message: "",
-        }
-        
-        // 解析源消息内容
-        if (parentMsg && parentMsg.data && parentMsg.data.content) {
-          const parentContent = JSON.parse(parentMsg.data.content)
+        // 从返回数据中提取消息内容
+        const parentMsg = parentMsgRet.data || parentMsgRet
+        if (parentMsg && parentMsg.content) {
+          const parentContent = JSON.parse(parentMsg.content)
+          const parentSender = parentMsg.sender || {}
+          
+          // 构造 reply 对象，包含必要字段
+          data.reply = {
+            message_id: message.parent_id,
+            user_id: `lark_${parentSender.sender_id?.open_id || parentSender.sender_id?.user_id || 'unknown'}`,
+            sender: {
+              user_id: `lark_${parentSender.sender_id?.open_id || parentSender.sender_id?.user_id || 'unknown'}`,
+              nickname: parentSender.sender_id?.user_id || 'unknown',
+            },
+            message: [],
+            raw_message: "",
+          }
+          
+          // 解析源消息内容
           if (parentContent.text) {
             data.reply.message.push({ type: "text", text: parentContent.text })
             data.reply.raw_message = parentContent.text
           }
+          
+          Bot.makeLog("debug", `reply 对象构造完成：${JSON.stringify(data.reply)}`, id)
+        } else {
+          Bot.makeLog("warn", `源消息数据格式异常`, id)
         }
-        
-        Bot.makeLog("debug", `reply 对象：${JSON.stringify(data.reply)}`, id)
       } catch (error) {
         Bot.makeLog("error", `获取源消息失败：${error.message}`, id)
+        Bot.makeLog("error", `错误堆栈：${error.stack}`, id)
       }
     }
 
