@@ -151,6 +151,8 @@ export class EchoPlugin extends plugin {
       ...this.e,
       msg: originalMsg,
       raw_message: originalMsg,
+      // 重新构造 message 数组，只包含原始消息文本，不要包含 reply 和当前指令
+      message: [{ type: "text", text: originalMsg }],
     }
 
     // 触发新的事件，让 Yunzai 重新处理指令
