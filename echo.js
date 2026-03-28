@@ -155,8 +155,7 @@ export class EchoPlugin extends plugin {
     // 构造新的事件数据，模拟用户发送原始指令
     const newEvent = {
       ...this.e,
-      msg: originalMsg,
-      raw_message: originalMsg,
+      // 不设置 msg 和 raw_message，让 Yunzai 的 dealEvent 自动从 message 数组提取
       // 重新构造 message 数组，只包含原始消息文本，不要包含 reply 和当前指令
       message: [{ type: "text", text: originalMsg }],
     }
