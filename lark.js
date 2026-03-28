@@ -875,6 +875,7 @@ const adapter = new class LarkAdapter {
       bot: Bot[id],
       post_type: "message",
       message_id: message.message_id,
+      id: sender.sender_id.user_id,
       user_id: `lark_${sender.sender_id.user_id}`,
       sender: {
         user_id: `lark_${sender.sender_id.user_id}`,
@@ -972,7 +973,12 @@ const adapter = new class LarkAdapter {
       self_id: id,
       bot: Bot[id],
       post_type: "message",
+      id: (userId || openId).replace(/^lark_/, ""),
       user_id: `lark_${userId || openId}`,
+      sender: {
+        user_id: `lark_${userId || openId}`,
+        nickname: userId || openId,
+      },
       message_type: chatType === "p2p" ? "private" : "group",
       message: [{ type: "text", text: callback }],
       raw_message: callback,
@@ -1082,8 +1088,11 @@ const adapter = new class LarkAdapter {
             const { AESCipher } = lark
             const cipher = new AESCipher(config.encrypt_key)
             const decrypted = cipher.decrypt(data.encrypt)
-            Bot.makeLog("debug", `解密后数据: ${decrypted}`, id)
-            decryptedData = JSON.parse(decrypted)
+            Bot.makeLog("debug", `解密后数据：${decrypted}`, id)
+            decryptedData = {
+              ...data,
+              ...JSON.parse(decrypted)
+            }
           } catch (e) {
             Bot.makeLog("error", `解密失败: ${e.message}`, id)
           }
@@ -1125,7 +1134,7 @@ const adapter = new class LarkAdapter {
         // 处理普通事件
         // 如果有 encrypt_key，SDK 会自动解密和验证
         // 使用 needCheck: false 跳过额外验证，但 SDK 仍会解密数据
-        const result = await eventDispatcher.invoke(data, { needCheck: false })
+        const result = await eventDispatcher.invoke(decryptedData, { needCheck: false })
         Bot.makeLog("debug", `事件处理结果: ${JSON.stringify(result)}`, id)
         res.json(result || { code: 0 })
       } catch (error) {
