@@ -979,12 +979,15 @@ const adapter = new class LarkAdapter {
 
     // 解析消息内容
     const content = JSON.parse(message.content)
+    Bot.makeLog("debug", `解析后的 content: ${JSON.stringify(content)}`, id)
     
     if (content.text) {
-      data.message.push({ type: "text", text: content.text })
-      data.raw_message += content.text
+      Bot.makeLog("debug", `消息内容类型：${typeof content.text}, 值：${JSON.stringify(content.text)}`, id)
+      const textContent = typeof content.text === "string" ? content.text : String(content.text)
+      data.message.push({ type: "text", text: textContent })
+      data.raw_message += textContent
       // 添加 msg 字段，这是 Yunzai 识别命令的关键
-      data.msg = content.text
+      data.msg = textContent
     }
 
     Bot.makeLog("info", `飞书${data.message_type === "group" ? "群" : "私聊"}消息：[${data.user_id}] ${data.raw_message}`, id)
