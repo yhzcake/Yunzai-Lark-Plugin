@@ -990,8 +990,7 @@ const adapter = new class LarkAdapter {
       const textContent = typeof content.text === "string" ? content.text : String(content.text)
       data.message.push({ type: "text", text: textContent })
       data.raw_message += textContent
-      // 添加 msg 字段，这是 Yunzai 识别命令的关键
-      data.msg = textContent
+      // 不设置 data.msg，让 Yunzai 的 dealEvent 自动处理
     }
 
     Bot.makeLog("info", `飞书${data.message_type === "group" ? "群" : "私聊"}消息：[${data.user_id}] ${data.raw_message}`, id)
