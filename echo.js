@@ -43,10 +43,11 @@ export class EchoPlugin extends plugin {
    */
   async echo() {
     // this.e.msg 包含完整的指令（包括#），需要去掉指令头
-    // 正则捕获组会自动去掉指令头，所以使用 this.e.reg
-    let text = this.e.reg?.[1]?.trim() || ""
+    // 使用正则匹配提取指令后的内容
+    const match = this.e.msg.match(/^#echo\s*(.*)$/)
+    let text = match ? match[1].trim() : ""
     
-    Bot.makeLog("debug", `Echo 捕获组：${JSON.stringify(this.e.reg)}`, this.e.self_id)
+    Bot.makeLog("debug", `Echo 原始消息：${this.e.msg}`, this.e.self_id)
     Bot.makeLog("debug", `Echo 提取的文本：${text}`, this.e.self_id)
     
     // 如果没有提供文本，检查是否有回复消息

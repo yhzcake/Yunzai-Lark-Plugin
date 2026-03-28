@@ -560,6 +560,10 @@ const adapter = new class LarkAdapter {
 
   async getFriendMsg(data, message_id) {
     // 直接使用 user_id/open_id，不需要调用 getFriendInfo（避免权限问题）
+    if (!data.user_id) {
+      Bot.makeLog("error", `getFriendMsg: data.user_id 不存在`, data.self_id)
+      return undefined
+    }
     const rawId = data.user_id.replace(/^lark_/, "")
     data.id = rawId.startsWith('ou_') ? rawId : rawId
     return this.getMsg(data, message_id)
