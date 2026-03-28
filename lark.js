@@ -927,6 +927,7 @@ const adapter = new class LarkAdapter {
       message_id: message.message_id,
       id: userId,
       user_id: `lark_${userId}`,
+      bot: Bot[id],  // 添加 bot 字段供 Yunzai 使用
       sender: senderData,
       raw_message: "",
       message: [],
@@ -987,12 +988,13 @@ const adapter = new class LarkAdapter {
     }
 
     Bot.makeLog("info", `飞书${data.message_type === "group" ? "群" : "私聊"}消息：[${data.user_id}] ${data.raw_message}`, id)
-    Bot.makeLog("debug", `构造的数据：msg=${data.msg}, message_type=${data.message_type}`, id)
+    Bot.makeLog("debug", `构造的数据：msg=${data.msg}, message_type=${data.message_type}, reply_id=${data.message.find(m => m.type === "reply")?.id || "无"}`, id)
     
     // 触发特定类型的消息事件
     // Yunzai 的 Bot.em() 方法会自动向上触发事件（message.private -> message）
     const result = Bot.em(`message.${data.message_type}`, data)
     Bot.makeLog("debug", `事件触发结果：${result}`, id)
+    Bot.makeLog("debug", `事件对象：friend=${!!data.friend}, group=${!!data.group}, bot=${!!data.bot}`, id)
   }
 
   async handleCardAction(id, data) {
