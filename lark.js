@@ -907,10 +907,6 @@ const adapter = new class LarkAdapter {
       // 添加 adapter 和 platform 字段供 ws-plugin 识别
       adapter: "Lark",
       platform: "lark",
-      // 添加 reply 方法
-      reply: async (msg) => {
-        return await this.sendMsg(data, msg)
-      },
     }
 
     // 判断是私聊还是群聊
@@ -943,24 +939,28 @@ const adapter = new class LarkAdapter {
         const parentMsg = parentMsgRet.data || parentMsgRet
         if (parentMsg && parentMsg.content) {
           const parentContent = JSON.parse(parentMsg.content)
-          const parentSender = parentMsg.sender || {}
+          const parentSenderId = parentMsg.sender?.sender_id?.open_id || parentMsg.sender?.sender_id?.user_id
           
-          // 构造 reply 对象，包含必要字段
-          data.reply = {
-            message_id: message.parent_id,
-            user_id: `lark_${parentSender.sender_id?.open_id || parentSender.sender_id?.user_id || 'unknown'}`,
-            sender: {
-              user_id: `lark_${parentSender.sender_id?.open_id || parentSender.sender_id?.user_id || 'unknown'}`,
-              nickname: parentSender.sender_id?.user_id || 'unknown',
+          // 构造 reply 对象，使用 Object.defineProperty 避免属性冲突
+          Object.defineProperty(data, 'reply', {
+            value: {
+              message_id: message.parent_id,
+              user_id: `lark_${parentSenderId || 'unknown'}`,
+              sender: {
+                user_id: `lark_${parentSenderId || 'unknown'}`,
+                nickname: parentMsg.sender?.sender_id?.user_id || 'unknown',
+              },
+              message: [],
+              raw_message: parentContent.text || "",
             },
-            message: [],
-            raw_message: "",
-          }
+            writable: true,
+            enumerable: true,
+            configurable: true
+          })
           
-          // 解析源消息内容
+          // 解析源消息内容到 message 数组
           if (parentContent.text) {
             data.reply.message.push({ type: "text", text: parentContent.text })
-            data.reply.raw_message = parentContent.text
           }
           
           Bot.makeLog("debug", `reply 对象构造完成：${JSON.stringify(data.reply)}`, id)
