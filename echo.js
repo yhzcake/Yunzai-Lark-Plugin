@@ -113,8 +113,13 @@ export class EchoPlugin extends plugin {
     // 获取回复消息的原始内容
     let originalMsg = ""
     
-    // 尝试从不同位置获取消息内容
-    if (replyMsg.message) {
+    // 优先从 raw_message 获取（这是完整的文本内容）
+    if (replyMsg.raw_message) {
+      originalMsg = replyMsg.raw_message.trim()
+    }
+    
+    // 如果 raw_message 为空，尝试从 message 数组提取
+    if (!originalMsg && replyMsg.message) {
       // 如果是数组，拼接所有文本内容
       if (Array.isArray(replyMsg.message)) {
         originalMsg = replyMsg.message
@@ -125,11 +130,6 @@ export class EchoPlugin extends plugin {
       } else if (typeof replyMsg.message === "string") {
         originalMsg = replyMsg.message.trim()
       }
-    }
-
-    // 尝试从 raw_message 获取
-    if (!originalMsg && replyMsg.raw_message) {
-      originalMsg = replyMsg.raw_message.trim()
     }
 
     if (!originalMsg) {
