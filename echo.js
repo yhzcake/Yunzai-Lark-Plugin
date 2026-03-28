@@ -42,8 +42,12 @@ export class EchoPlugin extends plugin {
    * 或者回复某条消息发送 echo，重复该消息
    */
   async echo() {
-    // this.e.msg 已经是去掉指令头的消息内容
-    let text = this.e.msg.trim()
+    // this.e.msg 包含完整的指令（包括#），需要去掉指令头
+    // 正则捕获组会自动去掉指令头，所以使用 this.e.reg
+    let text = this.e.reg?.[1]?.trim() || ""
+    
+    Bot.makeLog("debug", `Echo 捕获组：${JSON.stringify(this.e.reg)}`, this.e.self_id)
+    Bot.makeLog("debug", `Echo 提取的文本：${text}`, this.e.self_id)
     
     // 如果没有提供文本，检查是否有回复消息
     // 注意：this.e.reply 是方法，不是对象！应该检查 this.e.reply_id
@@ -140,8 +144,6 @@ export class EchoPlugin extends plugin {
       await this.reply("回复的消息不是指令，无法重试", true)
       return
     }
-
-    await this.reply(`重新执行指令：${originalMsg}`, true)
 
     // 构造新的事件数据，模拟用户发送原始指令
     const newEvent = {

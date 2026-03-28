@@ -953,11 +953,19 @@ const adapter = new class LarkAdapter {
         })
         data.group_name = `飞书群聊 (${message.chat_id})`
       }
+      // 添加 group 对象供 Yunzai 设置 getReply 使用
+      data.group = {
+        getMsg: (message_id) => this.getMsg(Bot[id], message_id),
+      }
     } else {
       data.message_type = "private"
       data.sub_type = "friend"
       data.group_id = undefined
       data.friend_id = data.user_id
+      // 添加 friend 对象供 Yunzai 设置 getReply 使用
+      data.friend = {
+        getMsg: (message_id) => this.getFriendMsg(Bot[id], message_id),
+      }
     }
 
     // 处理回复消息 - 使用飞书的 parent_id 字段
