@@ -50,9 +50,17 @@ const adapter = new class LarkAdapter {
         case "image":
           content.msg_type = "image"
           Bot.makeLog("debug", `开始处理图片消息: ${i.file}`, "Lark")
-          const imageKey = await this.uploadImage(i.file, client)
-          Bot.makeLog("debug", `获取到 image_key: ${imageKey}`, "Lark")
-          content.content = { image_key: imageKey }
+          // 检测是否已经是 image_key 格式（img_v3_开头）
+          if (typeof i.file === "string" && i.file.startsWith("img_v3_")) {
+            // 已经是 image_key，直接使用
+            Bot.makeLog("debug", `检测到已有 image_key: ${i.file}`, "Lark")
+            content.content = { image_key: i.file }
+          } else {
+            // 需要重新上传
+            const imageKey = await this.uploadImage(i.file, client)
+            Bot.makeLog("debug", `获取到 image_key: ${imageKey}`, "Lark")
+            content.content = { image_key: imageKey }
+          }
           break
         case "at":
           if (i.qq === "all") {
@@ -65,11 +73,23 @@ const adapter = new class LarkAdapter {
           break
         case "video":
           content.msg_type = "video"
-          content.content = { video_key: await this.uploadVideo(i.file, client) }
+          // 检测是否已经是 video_key 格式
+          if (typeof i.file === "string" && (i.file.startsWith("video_v3_") || i.file.startsWith("vod_"))) {
+            Bot.makeLog("debug", `检测到已有 video_key: ${i.file}`, "Lark")
+            content.content = { video_key: i.file }
+          } else {
+            content.content = { video_key: await this.uploadVideo(i.file, client) }
+          }
           break
         case "file":
           content.msg_type = "file"
-          content.content = { file_key: await this.uploadFile(i.file, client) }
+          // 检测是否已经是 file_key 格式
+          if (typeof i.file === "string" && (i.file.startsWith("file_v3_") || i.file.match(/^[a-zA-Z0-9_-]+$/))) {
+            Bot.makeLog("debug", `检测到已有 file_key: ${i.file}`, "Lark")
+            content.content = { file_key: i.file }
+          } else {
+            content.content = { file_key: await this.uploadFile(i.file, client) }
+          }
           break
         case "node":
           return this.makeForwardCard(i.data)
@@ -722,11 +742,17 @@ const adapter = new class LarkAdapter {
     // 飞书 API v1 返回的数据结构：data.items[0].body.content
     // 如果是这种格式，需要提取出来
     let contentData = messageData
+    let itemMentions = []  // 保存 mentions 信息
     if (messageData.items && Array.isArray(messageData.items) && messageData.items.length > 0) {
       const item = messageData.items[0]
       if (item.body && item.body.content) {
         // 解析嵌套的 content JSON 字符串
         try {
+          // 保存 mentions 信息
+          if (item.mentions && Array.isArray(item.mentions)) {
+            itemMentions = item.mentions
+          }
+          
           contentData = {
             ...messageData,
             content: typeof item.body.content === 'string' ? JSON.parse(item.body.content) : item.body.content,
@@ -760,13 +786,18 @@ const adapter = new class LarkAdapter {
       contentData.raw_message += text
     }
 
-    if (content?.mentions) {
-      for (const mention of content.mentions) {
-        contentData.message.push({ 
-          type: "at", 
-          qq: `lark_${mention.id}` 
-        })
-        contentData.raw_message += `[提及：lark_${mention.id}]`
+    // 处理 mentions（从 item.mentions 中提取）
+    if (itemMentions && itemMentions.length > 0) {
+      for (const mention of itemMentions) {
+        // 使用 mention.id.open_id 或 mention.id.user_id
+        const userId = mention.id?.open_id || mention.id?.user_id || mention.id
+        if (userId) {
+          contentData.message.push({ 
+            type: "at", 
+            qq: `lark_${userId}` 
+          })
+          contentData.raw_message += `[提及：lark_${userId}]`
+        }
       }
     }
 
@@ -815,18 +846,41 @@ const adapter = new class LarkAdapter {
     data = this.makeMessageArray(data)
     if (data.user_id === data.self_id) return
 
+    Bot.makeLog("debug", `makeMessage: self_id=${data.self_id}, user_id=${data.user_id}, message_type=${data.message_type}`, data.self_id)
+    Bot.makeLog("debug", `makeMessage: Bot[data.self_id]=${!!Bot[data.self_id]}, adapter.id=${Bot[data.self_id]?.adapter?.id}`, data.self_id)
+
     const eventData = data.data || data
     if (eventData.chat_type === "group") {
       data.message_type = "group"
       data.group_id = `lark_${eventData.chat_id}`
       data.group_name = eventData.chat_name || data.group_id
+      data.isGroup = true
       Bot.makeLog("info", `群消息：[${data.group_name}(${data.group_id}), ${data.sender.nickname}(${data.user_id})] ${data.raw_message}`, data.self_id)
     } else {
       data.message_type = "private"
+      data.isPrivate = true
       Bot.makeLog("info", `私聊消息：[${data.sender.nickname}(${data.user_id})] ${data.raw_message}`, data.self_id)
     }
 
-    Bot.em(`${data.post_type}.${data.message_type}`, data)
+    // 检查是否有@机器人
+    if (data.message && Array.isArray(data.message)) {
+      for (const msg of data.message) {
+        if (msg.type === "at" && msg.qq) {
+          // 提取 open_id 部分（去掉 lark_ 前缀）
+          const atOpenId = msg.qq.replace(/^lark_/, "")
+          // 检查是否@了机器人（飞书 bot 使用 app_id 标识）
+          const appId = data.self_id.replace(/^lark_/, "")
+          if (atOpenId === appId || msg.qq === data.self_id) {
+            data.atBot = true
+            Bot.makeLog("debug", `检测到@机器人：${msg.qq}`, data.self_id)
+            break
+          }
+        }
+      }
+    }
+
+    Bot.makeLog("debug", `准备触发事件：message.${data.message_type}, self_id=${data.self_id}`, data.self_id)
+    Bot.em(`message.${data.message_type}`, data)
   }
 
     async connect(app_id, app_secret) {
@@ -894,11 +948,9 @@ const adapter = new class LarkAdapter {
     Object.defineProperty(Bot[id], "gml", { get() { return this.getGroupMemberMap() }})
 
     // 设置 adapter 信息供 ws-plugin 使用
-    Bot[id].adapter = {
-      id: "Lark",
-      platform: "lark",
-      name: "Lark"
-    }
+    // 不要覆盖原有的 adapter 对象，只添加额外字段
+    Bot[id].adapter.platform = "lark"
+    Bot[id].adapter.name = "Lark"
 
     // 创建事件分发器处理消息事件
     const eventDispatcher = new lark.EventDispatcher({
