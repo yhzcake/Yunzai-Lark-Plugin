@@ -814,6 +814,58 @@ const adapter = new class LarkAdapter {
       }
     }
 
+    // 处理卡片消息（飞书交互式卡片）
+    if (content?.elements && Array.isArray(content.elements)) {
+      Bot.makeLog("debug", `检测到卡片消息，elements 数量：${content.elements.length}`, contentData.self_id)
+      
+      // 遍历卡片元素，提取文本内容
+      for (const element of content.elements) {
+        if (element.tag === "text" && element.text) {
+          // 提取卡片中的文本
+          const cardText = typeof element.text === "string" ? element.text : element.text.content || element.text.text
+          if (cardText) {
+            contentData.message.push({ type: "text", text: cardText })
+            contentData.raw_message += cardText
+          }
+        } else if (element.tag === "div" && element.text) {
+          // div 元素中的文本
+          const divText = typeof element.text === "string" ? element.text : element.text.content || element.text.text
+          if (divText) {
+            contentData.message.push({ type: "text", text: divText })
+            contentData.raw_message += divText
+          }
+        } else if (element.tag === "img" && element.image_key) {
+          // 卡片中的图片
+          contentData.message.push({
+            type: "image",
+            file: element.image_key,
+          })
+          contentData.raw_message += `[图片：${element.image_key}]`
+        } else if (element.tag === "hr") {
+          // 分隔线，添加分隔标记
+          contentData.raw_message += "\n---\n"
+        }
+      }
+    }
+
+    // 处理 lark_md 格式的卡片消息
+    if (content?.tag === "div" && content?.text) {
+      const mdText = typeof content.text === "string" ? content.text : content.text.text || content.text.content
+      if (mdText) {
+        contentData.message.push({ type: "text", text: mdText })
+        contentData.raw_message += mdText
+      }
+    }
+
+    // 处理标题
+    if (content?.title && !content.text) {
+      const titleText = typeof content.title === "string" ? content.title : content.title.text || content.title.content
+      if (titleText) {
+        contentData.message.push({ type: "text", text: `[标题] ${titleText}` })
+        contentData.raw_message += `[标题] ${titleText}`
+      }
+    }
+
     // 处理 mentions（从 item.mentions 中提取）
     if (itemMentions && itemMentions.length > 0) {
       for (const mention of itemMentions) {
@@ -829,6 +881,7 @@ const adapter = new class LarkAdapter {
       }
     }
 
+    // 处理图片消息（image 类型）
     if (content?.image_key) {
       contentData.message.push({
         type: "image",
@@ -837,20 +890,133 @@ const adapter = new class LarkAdapter {
       contentData.raw_message += `[图片：${content.image_key}]`
     }
 
-    if (content?.video_key) {
+    // 处理视频消息（media/video 类型）
+    if (content?.video_key || content?.file_key && content?.duration) {
+      const videoKey = content.video_key || content.file_key
       contentData.message.push({
         type: "video",
-        file: content.video_key,
+        file: videoKey,
       })
-      contentData.raw_message += `[视频：${content.video_key}]`
+      contentData.raw_message += `[视频：${videoKey}]`
+      if (content.file_name) {
+        contentData.raw_message += `(${content.file_name})`
+      }
     }
 
-    if (content?.file_key) {
+    // 处理文件消息（file 类型）
+    if (content?.file_key && !content?.duration) {
       contentData.message.push({
         type: "file",
         file: content.file_key,
       })
       contentData.raw_message += `[文件：${content.file_key}]`
+      if (content.file_name) {
+        contentData.raw_message += `(${content.file_name})`
+      }
+    }
+
+    // 处理语音消息（audio 类型）
+    if (content?.duration && content?.file_key) {
+      contentData.message.push({
+        type: "record",
+        file: content.file_key,
+      })
+      contentData.raw_message += `[语音：${content.file_key}]`
+    }
+
+    // 处理表情包消息（sticker 类型）
+    if (content?.file_key && content?.emoji_type) {
+      contentData.message.push({
+        type: "sticker",
+        file: content.file_key,
+      })
+      contentData.raw_message += `[表情包：${content.file_key}]`
+    }
+
+    // 处理分享群名片（share_chat 类型）
+    if (content?.chat_id && content?.share_type === "chat") {
+      contentData.message.push({
+        type: "share",
+        subType: "chat",
+        chatId: content.chat_id,
+      })
+      contentData.raw_message += `[分享群聊：${content.chat_id}]`
+    }
+
+    // 处理分享个人名片（share_user 类型）
+    if (content?.user_id && content?.share_type === "user") {
+      contentData.message.push({
+        type: "share",
+        subType: "user",
+        userId: content.user_id,
+      })
+      contentData.raw_message += `[分享用户：${content.user_id}]`
+    }
+
+    // 处理富文本消息（post 类型）
+    if (content?.content && Array.isArray(content.content)) {
+      Bot.makeLog("debug", `检测到富文本消息，段落数量：${content.content.length}`, contentData.self_id)
+      
+      // 遍历每个段落
+      for (const paragraph of content.content) {
+        if (!Array.isArray(paragraph)) continue
+        
+        // 遍历段落中的每个元素
+        for (const element of paragraph) {
+          if (element.tag === "text") {
+            contentData.message.push({ type: "text", text: element.text })
+            contentData.raw_message += element.text
+          } else if (element.tag === "a") {
+            // 超链接
+            contentData.message.push({ 
+              type: "text", 
+              text: `${element.text}(${element.href})` 
+            })
+            contentData.raw_message += `${element.text}(${element.href})`
+          } else if (element.tag === "at") {
+            // @提及
+            const userId = element.user_id
+            if (userId && userId !== "all") {
+              contentData.message.push({ 
+                type: "at", 
+                qq: `lark_${userId}` 
+              })
+              contentData.raw_message += `[提及：lark_${userId}]`
+            } else if (userId === "all") {
+              contentData.message.push({ 
+                type: "at", 
+                qq: "all" 
+              })
+              contentData.raw_message += `[@所有人]`
+            }
+          } else if (element.tag === "img") {
+            // 图片
+            if (element.image_key) {
+              contentData.message.push({
+                type: "image",
+                file: element.image_key,
+              })
+              contentData.raw_message += `[图片：${element.image_key}]`
+            }
+          } else if (element.tag === "media") {
+            // 视频
+            if (element.file_key) {
+              contentData.message.push({
+                type: "video",
+                file: element.file_key,
+              })
+              contentData.raw_message += `[视频：${element.file_key}]`
+            }
+          } else if (element.tag === "emotion") {
+            // 表情
+            contentData.message.push({
+              type: "sticker",
+              emoji_type: element.emoji_type,
+            })
+            contentData.raw_message += `[表情：${element.emoji_type}]`
+          }
+        }
+      }
     }
 
     // 添加 Yunzai 标准字段，确保其他插件能正确使用

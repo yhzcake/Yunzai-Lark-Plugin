@@ -160,26 +160,7 @@ export class EchoPlugin extends plugin {
       return
     }
 
-    // 从 messageContent 中提取纯文本用于日志和指令检查
-    const textContent = messageContent
-      .filter(m => m.type === "text")
-      .map(m => m.text)
-      .join(" ")
-      .trim()
-
-    if (!textContent) {
-      await this.reply("回复的消息不是文本指令，无法重试", true)
-      return
-    }
-
-    // 检查原始消息是否以指令前缀开头（支持多种前缀）
-    const cmdPrefixes = ["#", "/", "!", "."]
-    if (!cmdPrefixes.some(prefix => textContent.startsWith(prefix))) {
-      await this.reply("回复的消息不是指令，无法重试", true)
-      return
-    }
-
-    Bot.makeLog("info", `Retry 原始消息：${textContent}`, this.e.self_id)
+    Bot.makeLog("info", `Retry 消息：${JSON.stringify(messageContent)}`, this.e.self_id)
 
     // 构造新的事件数据，模拟用户发送原始指令
     const newEvent = {
@@ -188,11 +169,12 @@ export class EchoPlugin extends plugin {
       msg: undefined,
       raw_message: undefined,
       // 使用完整的 message 数组，保留@、图片等所有信息
+      // Yunzai 会自动判断是否是指令
       message: messageContent,
     }
 
     // 触发新的事件，让 Yunzai 重新处理指令
-    Bot.makeLog("info", `触发重试指令：${textContent}`, this.e.self_id)
+    Bot.makeLog("info", `触发重试，让 Yunzai 自行判断指令`, this.e.self_id)
     
     // 触发 message 事件（Yunzai 会自动向上触发）
     Bot.em(`message.${this.e.message_type}`, newEvent)
