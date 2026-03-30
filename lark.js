@@ -49,12 +49,27 @@ const adapter = new class LarkAdapter {
           break
         case "image":
           content.msg_type = "image"
-          Bot.makeLog("debug", `开始处理图片消息: ${i.file}`, "Lark")
+          Bot.makeLog("debug", `开始处理图片消息：${i.file}`, "Lark")
           // 检测是否已经是 image_key 格式（img_v3_开头）
           if (typeof i.file === "string" && i.file.startsWith("img_v3_")) {
-            // 已经是 image_key，直接使用
-            Bot.makeLog("debug", `检测到已有 image_key: ${i.file}`, "Lark")
-            content.content = { image_key: i.file }
+            // 需要从飞书下载图片再重新上传
+            Bot.makeLog("debug", `检测到 image_key，需要下载后重新上传：${i.file}`, "Lark")
+            try {
+              // 使用 im.image.get 下载图片
+              const imageResponse = await client.im.image.get({
+                query: {
+                  image_key: i.file
+                }
+              })
+              Bot.makeLog("debug", `下载图片结果：${JSON.stringify(imageResponse)}`, "Lark")
+              // imageResponse 是二进制数据（Buffer）
+              const imageKey = await this.uploadImage(imageResponse, client)
+              Bot.makeLog("debug", `重新上传后获取到 image_key: ${imageKey}`, "Lark")
+              content.content = { image_key: imageKey }
+            } catch (error) {
+              Bot.makeLog("error", `下载图片失败：${error.message}`, "Lark")
+              content.content = { image_key: i.file } // 降级处理，直接使用原 key
+            }
           } else {
             // 需要重新上传
             const imageKey = await this.uploadImage(i.file, client)
@@ -846,7 +861,16 @@ const adapter = new class LarkAdapter {
     data = this.makeMessageArray(data)
     if (data.user_id === data.self_id) return
 
-    Bot.makeLog("debug", `makeMessage: self_id=${data.self_id}, user_id=${data.user_id}, message_type=${data.message_type}`, data.self_id)
+    // 手动设置 msg 字段（从 message 数组中提取文本）
+    // 这必须在 Bot.em() 之前设置，因为 ws-plugin 会检查这个字段
+    if (data.message && Array.isArray(data.message)) {
+      data.msg = data.message
+        .filter(m => m.type === "text")
+        .map(m => m.text)
+        .join("")
+        .trim()
+    }
+    Bot.makeLog("debug", `makeMessage: self_id=${data.self_id}, user_id=${data.user_id}, message_type=${data.message_type}, msg=${data.msg}`, data.self_id)
     Bot.makeLog("debug", `makeMessage: Bot[data.self_id]=${!!Bot[data.self_id]}, adapter.id=${Bot[data.self_id]?.adapter?.id}`, data.self_id)
 
     const eventData = data.data || data

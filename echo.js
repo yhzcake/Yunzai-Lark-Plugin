@@ -121,39 +121,44 @@ export class EchoPlugin extends plugin {
     Bot.makeLog("debug", `回复消息 message: ${JSON.stringify(replyMsg.message)}`, this.e.self_id)
 
     // 获取回复消息的原始内容
-    let originalMsg = ""
     let messageContent = []
     
     // 优先使用完整的 message 数组（保留@、图片等结构化信息）
     if (replyMsg.message && Array.isArray(replyMsg.message)) {
       // 过滤掉 reply 元素，避免重复触发回复逻辑
       messageContent = replyMsg.message.filter(m => m.type !== "reply")
-      originalMsg = replyMsg.raw_message || replyMsg.message
-        .filter(m => m.type === "text")
-        .map(m => m.text)
-        .join(" ")
-        .trim()
-      Bot.makeLog("debug", `从 message 数组获取：${originalMsg}`, this.e.self_id)
+      Bot.makeLog("debug", `从 message 数组获取：${JSON.stringify(messageContent)}`, this.e.self_id)
     } else if (replyMsg.raw_message) {
       // 降级处理：只有纯文本
-      originalMsg = replyMsg.raw_message.trim()
-      messageContent = [{ type: "text", text: originalMsg }]
-      Bot.makeLog("debug", `从 raw_message 获取：${originalMsg}`, this.e.self_id)
+      messageContent = [{ type: "text", text: replyMsg.raw_message.trim() }]
+      Bot.makeLog("debug", `从 raw_message 获取：${replyMsg.raw_message}`, this.e.self_id)
     }
 
-    if (!originalMsg) {
+    if (messageContent.length === 0) {
       await this.reply("未找到可重试的消息内容", true)
       return
     }
 
-    Bot.makeLog("info", `Retry 原始消息：${originalMsg}`, this.e.self_id)
+    // 从 messageContent 中提取纯文本用于日志和指令检查
+    const textContent = messageContent
+      .filter(m => m.type === "text")
+      .map(m => m.text)
+      .join(" ")
+      .trim()
+
+    if (!textContent) {
+      await this.reply("回复的消息不是文本指令，无法重试", true)
+      return
+    }
 
     // 检查原始消息是否以指令前缀开头（支持多种前缀）
     const cmdPrefixes = ["#", "/", "!", "."]
-    if (!cmdPrefixes.some(prefix => originalMsg.startsWith(prefix))) {
+    if (!cmdPrefixes.some(prefix => textContent.startsWith(prefix))) {
       await this.reply("回复的消息不是指令，无法重试", true)
       return
     }
+
+    Bot.makeLog("info", `Retry 原始消息：${textContent}`, this.e.self_id)
 
     // 构造新的事件数据，模拟用户发送原始指令
     const newEvent = {
@@ -164,7 +169,7 @@ export class EchoPlugin extends plugin {
     }
 
     // 触发新的事件，让 Yunzai 重新处理指令
-    Bot.makeLog("info", `触发重试指令：${originalMsg}`, this.e.self_id)
+    Bot.makeLog("info", `触发重试指令：${textContent}`, this.e.self_id)
     
     // 触发 message 事件（Yunzai 会自动向上触发）
     Bot.em(`message.${this.e.message_type}`, newEvent)
