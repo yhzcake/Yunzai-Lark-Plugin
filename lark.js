@@ -800,14 +800,10 @@ const adapter = new class LarkAdapter {
       
       // 同时过滤文本中的 @提及 文本（格式：@用户名）
       // 因为 mentions 会生成真正的 @元素，避免重复
+      // 飞书在 content.text 中使用 @显示名，但在 mentions 中使用真实姓名，所以直接移除所有 @xxx 格式
       if (itemMentions && itemMentions.length > 0) {
-        for (const mention of itemMentions) {
-          const mentionName = mention.name || mention.sender?.name
-          if (mentionName) {
-            // 移除文本中的 @用户名
-            text = text.replace(new RegExp(`@${mentionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g'), "")
-          }
-        }
+        // 移除所有 @用户名 格式的文本（不包含空格）
+        text = text.replace(/@\S+/g, "")
         // 清理多余空格
         text = text.replace(/\s+/g, ' ').trim()
       }
@@ -923,7 +919,9 @@ const adapter = new class LarkAdapter {
     }
 
     Bot.makeLog("debug", `准备触发事件：message.${data.message_type}, self_id=${data.self_id}`, data.self_id)
+    Bot.makeLog("info", `[WS 测试] 即将触发事件，data.msg="${data.msg}", data.isPrivate=${data.isPrivate}, data.message=${JSON.stringify(data.message)}`, data.self_id)
     Bot.em(`message.${data.message_type}`, data)
+    Bot.makeLog("info", `[WS 测试] 事件触发完成`, data.self_id)
   }
 
     async connect(app_id, app_secret) {
