@@ -38,10 +38,20 @@ const adapter = new class LarkAdapter {
     
     const content = { msg_type: "text", content: { text: "" } }
     const files = []
+    const processedFiles = new Set() // 用于去重，避免重复处理相同的文件
     
     for (let i of msg) {
       if (typeof i !== "object")
         i = { type: "text", text: i }
+      
+      // 检查是否是文件类型且已处理过
+      if (i.file && typeof i.file === "string") {
+        if (processedFiles.has(i.file)) {
+          Bot.makeLog("debug", `跳过重复的文件: ${i.file}`, "Lark")
+          continue
+        }
+        processedFiles.add(i.file)
+      }
       
       switch (i.type) {
         case "text":
@@ -88,15 +98,32 @@ const adapter = new class LarkAdapter {
           break
         case "video":
           content.msg_type = "video"
-          // 检测是否已经是 video_key 格式
+          // 检测是否已经是 video_key 格式（video_v3_ 或 vod_ 开头）
           if (typeof i.file === "string" && (i.file.startsWith("video_v3_") || i.file.startsWith("vod_"))) {
             Bot.makeLog("debug", `检测到已有 video_key: ${i.file}`, "Lark")
             content.content = { video_key: i.file }
+          } else if (typeof i.file === "string" && i.file.startsWith("file_v3_")) {
+            // file_v3_ 是文件 key，不是视频 key，需要作为文件发送
+            Bot.makeLog("debug", `检测到 file_key 格式的视频，作为文件发送: ${i.file}`, "Lark")
+            content.msg_type = "file"
+            content.content = { file_key: i.file }
           } else {
             content.content = { video_key: await this.uploadVideo(i.file, client) }
           }
           break
         case "file":
+          content.msg_type = "file"
+          // 检测是否已经是 file_key 格式
+          if (typeof i.file === "string" && (i.file.startsWith("file_v3_") || i.file.match(/^[a-zA-Z0-9_-]+$/))) {
+            Bot.makeLog("debug", `检测到已有 file_key: ${i.file}`, "Lark")
+            content.content = { file_key: i.file }
+          } else {
+            content.content = { file_key: await this.uploadFile(i.file, client) }
+          }
+          break
+        case "record":
+          // 语音消息，Lark 不支持语音，作为文件发送
+          Bot.makeLog("debug", `处理语音消息（作为文件发送）: ${i.file}`, "Lark")
           content.msg_type = "file"
           // 检测是否已经是 file_key 格式
           if (typeof i.file === "string" && (i.file.startsWith("file_v3_") || i.file.match(/^[a-zA-Z0-9_-]+$/))) {
@@ -698,8 +725,10 @@ const adapter = new class LarkAdapter {
   pickFriend(id, user_id) {
     if (typeof user_id !== "string")
       user_id = String(user_id)
+    // 从 fl 获取好友信息，如果不存在则使用空对象
+    const friendInfo = Bot[id].fl?.get(user_id) || {}
     const i = {
-      ...Bot[id].fl.get(user_id),
+      ...friendInfo,
       self_id: id,
       bot: Bot[id],
       user_id: user_id.replace(/^lark_/, ""),
@@ -710,7 +739,7 @@ const adapter = new class LarkAdapter {
       getMsg: message_id => this.getFriendMsg(i, message_id),
       recallMsg: message_id => this.recallFriendMsg(i, message_id),
       getInfo: () => this.getFriendInfo(i),
-      getAvatarUrl: async () => (await this.getFriendInfo(i)).avatar,
+      getAvatarUrl: async () => (await this.getFriendInfo(i))?.avatar || "",
     }
   }
 
@@ -719,8 +748,10 @@ const adapter = new class LarkAdapter {
       group_id = String(group_id)
     if (typeof user_id !== "string")
       user_id = String(user_id)
+    // 从 fl 获取好友信息，如果不存在则使用空对象
+    const friendInfo = Bot[id].fl?.get(user_id) || {}
     const i = {
-      ...Bot[id].fl.get(user_id),
+      ...friendInfo,
       self_id: id,
       bot: Bot[id],
       group_id: group_id.replace(/^lark_/, ""),
@@ -735,8 +766,10 @@ const adapter = new class LarkAdapter {
   pickGroup(id, group_id) {
     if (typeof group_id !== "string")
       group_id = String(group_id)
+    // 从 gl 获取群组信息，如果不存在则使用空对象
+    const groupInfo = Bot[id].gl?.get(group_id) || {}
     const i = {
-      ...Bot[id].gl.get(group_id),
+      ...groupInfo,
       self_id: id,
       bot: Bot[id],
       id: group_id.replace(/^lark_/, ""),
@@ -1134,6 +1167,8 @@ const adapter = new class LarkAdapter {
     Bot[id].stat = { start_time: Date.now() / 1000 }
     Bot[id].userCache = new Map()
     Bot[id].chatCache = new Map()
+    Bot[id].fl = new Map()  // 好友列表
+    Bot[id].gl = new Map()  // 群组列表
 
     Bot[id].pickFriend = user_id => this.pickFriend(id, user_id)
     Bot[id].pickUser = Bot[id].pickFriend
