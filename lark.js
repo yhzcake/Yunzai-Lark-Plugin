@@ -1095,6 +1095,7 @@ const adapter = new class LarkAdapter {
         ...groupData,
         getMsg: (message_id) => this.getMsg(groupData, message_id),
         sendMsg: (msg) => this.sendMsg(groupData, msg),
+        pickMember: (user_id) => this.pickMember(id, groupData.group_id, user_id),
       }
     } else {
       data.message_type = "private"

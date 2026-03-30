@@ -64,10 +64,31 @@ export class EchoPlugin extends plugin {
             .map(m => m.text)
             .join(" ")
             .trim()
+          
+          // 去掉指令头（#echo、/echo 等），只保留参数部分
+          const cmdMatch = textContent.match(/^[#/!.]?echo\s*(.*)$/i)
+          if (cmdMatch) {
+            textContent = cmdMatch[1] || ""
+            // 如果去掉了指令头，也需要更新 messageContent
+            const textElements = messageContent.filter(m => m.type === "text")
+            if (textElements.length > 0) {
+              // 更新第一个 text 元素，去掉指令头
+              const firstText = textElements[0].text
+              const newText = firstText.replace(/^[#/!.]?echo\s*/i, "")
+              if (newText.trim() === "") {
+                // 如果去掉指令头后为空，移除这个元素
+                messageContent = messageContent.filter(m => m !== textElements[0])
+              } else {
+                textElements[0].text = newText
+              }
+            }
+          }
+          Bot.makeLog("debug", `从 message 数组获取：${JSON.stringify(messageContent)}`, this.e.self_id)
         } else if (replyMsg.raw_message) {
           // 降级处理：只有纯文本
           textContent = replyMsg.raw_message.trim()
           messageContent = [{ type: "text", text: textContent }]
+          Bot.makeLog("debug", `从 raw_message 获取：${replyMsg.raw_message}`, this.e.self_id)
         }
       } else {
         Bot.makeLog("warn", `无法获取回复消息内容`, this.e.self_id)
