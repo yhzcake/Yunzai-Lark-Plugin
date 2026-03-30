@@ -163,7 +163,9 @@ export class EchoPlugin extends plugin {
     // 构造新的事件数据，模拟用户发送原始指令
     const newEvent = {
       ...this.e,
-      // 不设置 msg 和 raw_message，让 Yunzai 的 dealEvent 自动从 message 数组提取
+      // 清除当前消息的 msg 和 raw_message，避免包含 #retry 指令本身
+      msg: undefined,
+      raw_message: undefined,
       // 使用完整的 message 数组，保留@、图片等所有信息
       message: messageContent,
     }

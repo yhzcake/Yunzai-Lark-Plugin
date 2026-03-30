@@ -797,8 +797,25 @@ const adapter = new class LarkAdapter {
       // 过滤飞书 reply 方法自动添加的引用标记 [lark_ou_xxx]
       let text = content.text
       text = text.replace(/^\[lark_[a-zA-Z0-9_]+\]\s*/, "")
-      contentData.message.push({ type: "text", text: text })
-      contentData.raw_message += text
+      
+      // 同时过滤文本中的 @提及 文本（格式：@用户名）
+      // 因为 mentions 会生成真正的 @元素，避免重复
+      if (itemMentions && itemMentions.length > 0) {
+        for (const mention of itemMentions) {
+          const mentionName = mention.name || mention.sender?.name
+          if (mentionName) {
+            // 移除文本中的 @用户名
+            text = text.replace(new RegExp(`@${mentionName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g'), "")
+          }
+        }
+        // 清理多余空格
+        text = text.replace(/\s+/g, ' ').trim()
+      }
+      
+      if (text) {
+        contentData.message.push({ type: "text", text: text })
+        contentData.raw_message += text
+      }
     }
 
     // 处理 mentions（从 item.mentions 中提取）
@@ -871,7 +888,9 @@ const adapter = new class LarkAdapter {
         .trim()
     }
     Bot.makeLog("debug", `makeMessage: self_id=${data.self_id}, user_id=${data.user_id}, message_type=${data.message_type}, msg=${data.msg}`, data.self_id)
-    Bot.makeLog("debug", `makeMessage: Bot[data.self_id]=${!!Bot[data.self_id]}, adapter.id=${Bot[data.self_id]?.adapter?.id}`, data.self_id)
+    Bot.makeLog("debug", `makeMessage: Bot[data.self_id]=${!!Bot[data.self_id]}, adapter.id=${Bot[data.self_id]?.adapter?.id}, adapter.platform=${Bot[data.self_id]?.adapter?.platform}`, data.self_id)
+    Bot.makeLog("debug", `makeMessage: data.isPrivate=${data.isPrivate}, data.isGroup=${data.isGroup}`, data.self_id)
+    Bot.makeLog("debug", `makeMessage: data.message=${JSON.stringify(data.message)}`, data.self_id)
 
     const eventData = data.data || data
     if (eventData.chat_type === "group") {
