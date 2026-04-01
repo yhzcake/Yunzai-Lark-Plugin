@@ -138,8 +138,39 @@ const adapter = new class LarkAdapter {
         case "raw":
           // 原始消息，直接返回
           return { content: i.data, files }
+        case "face":
+          // 表情，Lark 不支持 QQ 表情，转为文本表示
+          Bot.makeLog("debug", `处理表情: ${i.id}`, "Lark")
+          content.content.text += `[表情:${i.id}]`
+          break
+        case "json":
+          // JSON 卡片，尝试解析并转为文本或卡片
+          Bot.makeLog("debug", `处理 JSON 卡片`, "Lark")
+          try {
+            const jsonData = typeof i.data === "string" ? JSON.parse(i.data) : i.data
+            // 如果是按钮或卡片，可以尝试转换
+            if (jsonData.app || jsonData.prompt) {
+              content.content.text += `[卡片消息]`
+            } else {
+              content.content.text += JSON.stringify(jsonData).substring(0, 100)
+            }
+          } catch (e) {
+            content.content.text += `[JSON卡片]`
+          }
+          break
+        case "music":
+          // 音乐分享，转为文本链接
+          Bot.makeLog("debug", `处理音乐分享: ${i.type}`, "Lark")
+          content.content.text += `[音乐分享]`
+          break
+        case "poke":
+          // 戳一戳，Lark 不支持，转为文本
+          Bot.makeLog("debug", `处理戳一戳`, "Lark")
+          content.content.text += `[戳了戳]`
+          break
         default:
-          content.content.text += JSON.stringify(i)
+          Bot.makeLog("warn", `未处理的消息类型: ${i.type}`, "Lark")
+          content.content.text += `[${i.type}]`
       }
     }
     
@@ -225,8 +256,29 @@ const adapter = new class LarkAdapter {
             }
           }
           break
+        case "face":
+          // 表情，Lark 不支持 QQ 表情，转为文本表示
+          Bot.makeLog("debug", `卡片中处理表情: ${i.id}`, "Lark")
+          textContent += `[表情:${i.id}]`
+          break
+        case "json":
+          // JSON 卡片
+          Bot.makeLog("debug", `卡片中处理 JSON 卡片`, "Lark")
+          textContent += `[卡片消息]`
+          break
+        case "music":
+          // 音乐分享
+          Bot.makeLog("debug", `卡片中处理音乐分享`, "Lark")
+          textContent += `[音乐分享]`
+          break
+        case "poke":
+          // 戳一戳
+          Bot.makeLog("debug", `卡片中处理戳一戳`, "Lark")
+          textContent += `[戳了戳]`
+          break
         default:
-          textContent += JSON.stringify(i)
+          Bot.makeLog("warn", `卡片中未处理的消息类型: ${i.type}`, "Lark")
+          textContent += `[${i.type}]`
       }
     }
     
